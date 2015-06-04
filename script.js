@@ -32,7 +32,9 @@ var canvasEl = document.createElement('canvas'),
 		contrast: 1,
 		ascenderHeight: 750,
 		spacing: 1.1
-	};
+	},
+	// alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz';
+	alphabet = 'A';
 
 canvasEl.width = 1024;
 canvasEl.height = 1024;
@@ -46,8 +48,10 @@ window.PrototypoCanvas.load({
 
 }).then(function( instance ) {
 	instance.update( values );
+	instance.subset( alphabet );
 	instance.displayGlyph( 'A_cap' );
 	$('#glyphList').val('A_cap');
+	$('#sample').val( alphabet );
 
 	paper.view.update();
 
@@ -69,5 +73,8 @@ window.PrototypoCanvas.load({
 	});
 	$('#export').on('click', function() {
 		instance.download();
+	});
+	$('#sample').on('input', function( event ) {
+		instance.subset( event.target.value );
 	});
 });

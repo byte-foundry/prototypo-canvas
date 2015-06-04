@@ -2,7 +2,8 @@ module.exports = function worker() {
 	'prototypo.js';
 
 	var font,
-		handlers = {};
+		handlers = {},
+		currValues;
 
 	self.postMessage({ type: 'ready' });
 
@@ -15,6 +16,7 @@ module.exports = function worker() {
 	prototypo.paper.Font.prototype.addToFonts = function() {
 		var buffer = this.ot.toBuffer();
 		self.postMessage( buffer, [ buffer ] );
+		// self.postMessage( this.subset );
 	};
 
 	// mini router
@@ -36,9 +38,31 @@ module.exports = function worker() {
 	};
 
 	handlers.update = function( params ) {
+		currValues = params;
+
 		font.update( params );
 
 		font.updateOTCommands()
 			.addToFonts();
+	};
+
+	handlers.subset = function( string ) {
+		var prevSubset = font.subset || Object.keys( font.charMap );
+		font.subset = string;
+		var currSubset = font.subset || Object.keys( font.charMap );
+
+		// search for chars *added* to the subset
+		currSubset.filter(function( code ) {
+			return prevSubset.indexOf( code ) === -1;
+
+		// update those glyphs
+		}).forEach(function( code ) {
+			if ( font.charMap[code] ) {
+				font.charMap[code].update( currValues );
+				font.updateOTCommands();
+			}
+		});
+
+		font.addToFonts();
 	};
 };

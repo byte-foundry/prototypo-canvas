@@ -27,7 +27,12 @@ function PrototypoCanvas( opts ) {
 	this.font = prototypo.parametricFont( opts.fontSource );
 	this.isMousedown = false;
 
-	this.worker.onmessage = function(e) {console.timeEnd('a');
+	this.worker.onmessage = function(e) {console.log(e.data);
+		if ( !(e.data instanceof ArrayBuffer) ) {
+			this.isWorkerBusy = false;
+			return;
+		}
+
 		this.latestBuffer = e.data;
 		this.font.addToFonts( e.data );
 
@@ -39,6 +44,14 @@ function PrototypoCanvas( opts ) {
 			});
 
 			delete this.latestValues;
+
+		} else if ( this.latestSubset ) {
+			this.worker.postMessage({
+				type: 'subset',
+				data: this.latestSubset
+			});
+
+			delete this.latestSubset;
 
 		} else {
 			this.isWorkerBusy = false;
@@ -58,7 +71,7 @@ function PrototypoCanvas( opts ) {
 
 		$(opts.canvas).on( type + 'down', this.downHandler.bind(this) );
 
-		$(opts.canvas).on( type + 'up', this.upHandler.bind(this) );
+		$(document).on( type + 'up', this.upHandler.bind(this) );
 	}
 }
 
@@ -158,8 +171,6 @@ PrototypoCanvas.prototype.displayGlyph = function( name ) {
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
-	this.currValues = values;
-
 	if ( this.currGlyph ) {
 		this.currGlyph.update( values );
 		this.view.update();
@@ -168,7 +179,7 @@ PrototypoCanvas.prototype.update = function( values ) {
 	if ( !this.isWorkerBusy ) {
 		// block updates
 		this.isWorkerBusy = true;
-console.time('a');
+
 		this.worker.postMessage({
 			type: 'update',
 			data: values
@@ -179,6 +190,29 @@ console.time('a');
 	} else {
 		this.latestValues = values;
 	}
+
+	this.currValues = values;
+};
+
+PrototypoCanvas.prototype.subset = function( string ) {
+	if ( !this.isWorkerBusy ) {
+		if ( this.currSubset !== undefined ) {
+			// block updates
+			this.isWorkerBusy = true;
+		}
+
+		this.worker.postMessage({
+			type: 'subset',
+			data: string
+		});
+
+	// if the worker is already busy, store the latest values so that we can
+	// eventually update the font with the latest values
+	} else {
+		this.latestSubset = string;
+	}
+
+	this.currSubset = string;
 };
 
 PrototypoCanvas.prototype.download = function() {
@@ -189,7 +223,7 @@ PrototypoCanvas.prototype.download = function() {
 	}
 
 	this.font.download( this.latestBuffer );
-}
+};
 
 PrototypoCanvas.load = function( opts ) {
 	opts = _.assign({
@@ -202,7 +236,7 @@ PrototypoCanvas.load = function( opts ) {
 		!opts.fontSource && opts.fontUrl,
 		!workerSource && opts.prototypoUrl
 	].map(function( url ) {
-		return url && window.fetch( url );
+		return url && fetch( url );
 
 	})).then(function( results ) {
 		return Promise.all([

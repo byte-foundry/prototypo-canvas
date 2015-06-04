@@ -29,6 +29,8 @@
 			}
 
 			#sample {
+				display: block;
+				width: 1024px;
 				font-family: "genese", serif;
 			}
 		</style>
@@ -62,15 +64,14 @@
 			</select>
 			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
 			<button id="export">▾ export</button>
-			<div id="sample">
-				ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>
-				abcdefghijklmnopqrstuvwxyz
-			</div>
+			<textarea id="sample">ABCDEFGHIJKLMNOPQRSTUVWXYZ
+abcdefghijklmnopqrstuvwxyz</textarea>
 		</div>
 
 		<script src="node_modules/jquery/dist/jquery.js"></script>
 		<script src="node_modules/jquery.wheel.js/dist/jquery.wheel.js"></script>
 		<script src="node_modules/pepjs/dist/pep.js"></script>
+		<script src="node_modules/whatwg-fetch/fetch.js"></script>
 		<script src="node_modules/prototypo.js/dist/prototypo.js"></script>
 		<script src="dist/prototypo-canvas.js"></script>
 		<script src="script.js"></script>
