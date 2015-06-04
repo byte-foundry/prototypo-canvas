@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+		<meta name="viewport" content="width=device-width, initial-scale=1, minimal-ui">
+		<title>Prototypo canvas component</title>
+		<meta name="description" content="">
+		<!-- Place favicon.ico and apple-touch-icon.png in the root directory -->
+
+		<!-- livereload -->
+		<script src="//localhost:9091"></script>
+
+		<link rel="stylesheet" href="node_modules/normalize.css/normalize.css" />
+
+		<style>
+			html,
+			body {
+				height: 100%;
+				overflow: hidden;
+			}
+
+			canvas {
+				display: block;
+			}
+
+			input {
+				vertical-align: middle;
+			}
+
+			#sample {
+				font-family: "genese", serif;
+			}
+		</style>
+	</head>
+	<body>
+		<!--[if lt IE 10]>
+			<p class="chromeframe">You are using an outdated browser. <a href="http://browsehappy.com/">Upgrade your browser today</a> or <a href="http://www.google.com/chromeframe/?redirect=true">install Google Chrome Frame</a> to better experience this site.</p>
+		<![endif]-->
+		<div id="main" role="main">
+			<button id="zoomIn">+</button>
+			<button id="zoomReset">0</button>
+			<button id="zoomOut">-</button>
+			<select id="glyphList">
+				<option value="A_cap">A</option>
+				<option value="B_cap">B</option>
+				<option value="C_cap">C</option>
+				<option value="D_cap">D</option>
+				<option value="E_cap">E</option>
+				<option value="F_cap">F</option>
+				<option value="G_cap">G</option>
+				<option value="H_cap">H</option>
+				<option value="I_cap">I</option>
+				<option value="J_cap">J</option>
+				<option value="K_cap">K</option>
+				<option value="L_cap">L</option>
+				<option value="M_cap">M</option>
+				<option value="N_cap">N</option>
+				<option value="O_cap">O</option>
+				<option value="P_cap">P</option>
+				<option value="Q_cap">Q</option>
+			</select>
+			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
+			<button id="export">▾ export</button>
+			<div id="sample">
+				ABCDEFGHIJKLMNOPQRSTUVWXYZ<br/>
+				abcdefghijklmnopqrstuvwxyz
+			</div>
+		</div>
+
+		<script src="node_modules/jquery/dist/jquery.js"></script>
+		<script src="node_modules/jquery.wheel.js/dist/jquery.wheel.js"></script>
+		<script src="node_modules/pepjs/dist/pep.js"></script>
+		<script src="node_modules/prototypo.js/dist/prototypo.js"></script>
+		<script src="dist/prototypo-canvas.js"></script>
+		<script src="script.js"></script>
+	</body>
+</html>

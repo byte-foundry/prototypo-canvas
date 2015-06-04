@@ -2,25 +2,60 @@
   "name": "prototypo-canvas",
   "version": "0.1.0",
   "description": "Prototypo canvas-rendering component",
-  "main": "index.js",
+  "author": "Louis-Rémi <lrbabe@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/byte-foundry/prototypo-canvas/issues"
+  },
+  "homepage": "https://github.com/byte-foundry/prototypo-canvas",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "gulp": "gulp",
+    "help": "gulp --tasks",
+    "test": "gulp build",
+    "//prepublish": "gulp build"
+  },
+  "browserify": {
+    "transform": [
+      "browserify-global-shim"
+    ]
+  },
+  "browserify-global-shim": {
+    "prototypo.js": "prototypo"
   },
   "repository": {
     "type": "git",
     "url": "git@github.com:byte-foundry/prototypo-canvas.git"
   },
   "keywords": [
-    "react",
-    "component",
     "canvas",
     "paperjs",
-    "plumin"
+    "pluminjs",
+    "prototypojs"
   ],
-  "author": "Louis-Rémi <lrbabe@gmail.com>",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/byte-foundry/prototypo-canvas/issues"
+  "dependencies": {
+    "jquery": "^2.1.4",
+    "jquery.wheel.js": "0.1.0",
+    "lodash.assign": "^3.2.0",
+    "normalize.css": "^3.0.3",
+    "pepjs": "^0.3.0",
+    "prototypo.js": "^0.3.1"
   },
-  "homepage": "https://github.com/byte-foundry/prototypo-canvas"
+  "devDependencies": {
+    "browser-sync": "^2.4.0",
+    "browserify": "^9.0.3",
+    "browserify-shim": "^3.8.7",
+    "chai": "^2.1.2",
+    "deptree": "^0.1.0",
+    "eslint": "^0.17.1",
+    "exorcist": "^0.1.6",
+    "ghooks": "^0.3.0",
+    "gulp": "^3.8.11",
+    "gulp-shelter": "^0.9.1",
+    "jscs": "^1.11.3",
+    "mocha": "^2.2.1",
+    "plumin.js": "^0.8.1",
+    "test.ptf": "byte-foundry/test.ptf",
+    "uglify-js": "^2.4.17",
+    "watchify": "^2.6.0"
+  }
 }
