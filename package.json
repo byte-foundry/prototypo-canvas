@@ -16,11 +16,11 @@
   },
   "browserify": {
     "transform": [
-      "browserify-global-shim"
+      "browserify-shim"
     ]
   },
-  "browserify-global-shim": {
-    "prototypo.js": "prototypo"
+  "browserify-shim": {
+    "prototypo.js": "global:prototypo"
   },
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
   ],
   "dependencies": {
     "jquery": "^2.1.4",
-    "jquery.wheel.js": "0.1.0",
+    "jquery.wheel.js": "0.2.0",
     "lodash.assign": "^3.2.0",
     "normalize.css": "^3.0.3",
     "pepjs": "^0.3.0",
