@@ -33,8 +33,8 @@ var canvasEl = document.createElement('canvas'),
 		ascenderHeight: 750,
 		spacing: 1.1
 	},
-	// alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz';
-	alphabet = 'A';
+	alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz';
+	// alphabet = 'A';
 
 canvasEl.width = 1024;
 canvasEl.height = 1024;

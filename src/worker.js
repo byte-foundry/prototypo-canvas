@@ -16,7 +16,6 @@ module.exports = function worker() {
 	prototypo.paper.Font.prototype.addToFonts = function() {
 		var buffer = this.ot.toBuffer();
 		self.postMessage( buffer, [ buffer ] );
-		// self.postMessage( this.subset );
 	};
 
 	// mini router
@@ -39,9 +38,9 @@ module.exports = function worker() {
 
 	handlers.update = function( params ) {
 		currValues = params;
-
+console.profile('a');
 		font.update( params );
-
+console.profileEnd('a');
 		font.updateOTCommands()
 			.addToFonts();
 	};

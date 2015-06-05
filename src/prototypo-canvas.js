@@ -27,7 +27,7 @@ function PrototypoCanvas( opts ) {
 	this.font = prototypo.parametricFont( opts.fontSource );
 	this.isMousedown = false;
 
-	this.worker.onmessage = function(e) {console.log(e.data);
+	this.worker.onmessage = function(e) {
 		if ( !(e.data instanceof ArrayBuffer) ) {
 			this.isWorkerBusy = false;
 			return;
