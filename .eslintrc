@@ -25,6 +25,7 @@
 		"prototypo": true
 	},
 	"rules": {
-		"quotes": "single"
+		"quotes": "single",
+		"no-underscore-dangle": false
 	}
 }

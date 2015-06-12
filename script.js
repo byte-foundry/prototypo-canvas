@@ -47,14 +47,6 @@ window.PrototypoCanvas.load({
 	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
 
 }).then(function( instance ) {
-	instance.update( values );
-	instance.subset( alphabet );
-	instance.displayGlyph( 'A_cap' );
-	$('#glyphList').val('A_cap');
-	$('#sample').val( alphabet );
-
-	paper.view.update();
-
 	$('#zoomIn').on('click', function() {
 		instance.zoomIn();
 	});
@@ -62,10 +54,14 @@ window.PrototypoCanvas.load({
 		instance.zoomOut();
 	});
 	$('#zoomReset').on('click', function() {
-		instance.zoom(1);
+		instance.zoom = 1;
 	});
-	$('#glyphList').on('change', function( event ) {
-		instance.displayGlyph( event.target.value );
+	$('#glyphList').on('input', function( event ) {
+		if ( event.target.value === '' ) {
+			return;
+		}
+
+		instance.displayChar( event.target.value );
 	});
 	$('#thickness').on('input', function( event ) {
 		values.thickness = +event.target.value;
@@ -77,4 +73,20 @@ window.PrototypoCanvas.load({
 	$('#sample').on('input', function( event ) {
 		instance.subset( event.target.value );
 	});
+	$('#outline').on('change', function( event ) {
+		instance.fill = !$(event.target).is(':checked');
+	});
+	$('#nodes').on('change', function( event ) {
+		instance.showNodes = $(event.target).is(':checked');
+	});
+
+	instance.update( values );
+	instance.subset( alphabet );
+	instance.displayChar( 'A' );
+	$('#glyphList').val('A');
+	$('#sample').val( alphabet );
+	$('#outline').attr({ checked: false });
+	$('#nodes').attr({ checked: false });
+
+	paper.view.update();
 });

@@ -1,18 +1,53 @@
 var prototypo = require('prototypo.js'),
 	assign = require('lodash.assign'),
-	shell = require('./worker');
+	// Grid = require('./grid'),
+	_drawSelected = require('./drawNodes')._drawSelected,
+	load = require('./load');
 
 var _ = { assign: assign },
-	paper = prototypo.paper,
-	URL = window.URL || window.webkitURL,
-	workerSource;
+	paper = prototypo.paper;
 
+// handles buffers coming from the worker
+function fontBufferHandler(e) {
+	if ( !(e.data instanceof ArrayBuffer) ) {
+		this.isWorkerBusy = false;
+		return;
+	}
+
+	this.latestBuffer = e.data;
+	this.font.addToFonts( e.data );
+
+	// process latest Values
+	if ( this.latestValues ) {
+		this.worker.postMessage({
+			type: 'update',
+			data: this.latestValues
+		});
+
+		delete this.latestValues;
+
+	} else if ( this.latestSubset ) {
+		this.worker.postMessage({
+			type: 'subset',
+			data: this.latestSubset
+		});
+
+		delete this.latestSubset;
+
+	} else {
+		this.isWorkerBusy = false;
+	}
+}
+
+// constructor
 function PrototypoCanvas( opts ) {
 	paper.setup( opts.canvas );
 	// enable pointerevents on the canvas
 	opts.canvas.setAttribute('touch-action', 'none');
 
 	this.opts = _.assign({
+		fill: true,
+		shoNodes: false,
 		zoomFactor: 0.05,
 		jQueryListeners: true
 	}, opts);
@@ -24,40 +59,15 @@ function PrototypoCanvas( opts ) {
 	this.project.activeLayer.applyMatrix = false;
 	this.project.activeLayer.scale( 1, -1 );
 	this.worker = opts.worker;
+	this._fill = this.opts.fill;
+	this._showNodes = this.opts.showNodes;
+
+	// this.grid = new Grid( paper );
+
 	this.font = prototypo.parametricFont( opts.fontSource );
 	this.isMousedown = false;
 
-	this.worker.onmessage = function(e) {
-		if ( !(e.data instanceof ArrayBuffer) ) {
-			this.isWorkerBusy = false;
-			return;
-		}
-
-		this.latestBuffer = e.data;
-		this.font.addToFonts( e.data );
-
-		// process latest Values
-		if ( this.latestValues ) {
-			this.worker.postMessage({
-				type: 'update',
-				data: this.latestValues
-			});
-
-			delete this.latestValues;
-
-		} else if ( this.latestSubset ) {
-			this.worker.postMessage({
-				type: 'subset',
-				data: this.latestSubset
-			});
-
-			delete this.latestSubset;
-
-		} else {
-			this.isWorkerBusy = false;
-		}
-
-	}.bind(this);
+	this.worker.onmessage = fontBufferHandler.bind(this);
 
 	// jQuery is an optional dependency
 	if ( ( 'jQuery' in window ) && this.opts.jQueryListeners ) {
@@ -75,6 +85,36 @@ function PrototypoCanvas( opts ) {
 	}
 }
 
+Object.defineProperties( PrototypoCanvas.prototype, {
+	zoom: {
+		get: function() {
+			return this.view.zoom;
+		},
+		set: function( zoom ) {
+			this.view.zoom = zoom;
+			// this.grid.zoom = zoom;
+		}
+	},
+	fill: {
+		get: function() {
+			return this._fill;
+		},
+		set: function( bool ) {
+			this._fill = bool;
+			this.displayGlyph();
+		}
+	},
+	showNodes: {
+		get: function() {
+			return this._showNodes;
+		},
+		set: function( bool ) {
+			this._showNodes = bool;
+			this.displayGlyph();
+		}
+	}
+});
+
 PrototypoCanvas.prototype.wheelHandler = function( event ) {
 	var bcr = this.canvas.getBoundingClientRect(),
 		currPos = new paper.Point(
@@ -82,8 +122,9 @@ PrototypoCanvas.prototype.wheelHandler = function( event ) {
 			event.clientY - bcr.top
 		),
 		viewPos = this.view.viewToProject( currPos ),
-		// the expected delatY is 3, but it's different in MacOS
-		factor = 1 + ( this.opts.zoomFactor * ( Math.abs(event.deltaY) / 3 ) ),
+		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
+		factor = 1 + ( this.opts.zoomFactor *
+			( Math.abs(event.deltaY / event.deltaMode ? 3 : 40 ) ) ),
 		newZoom =
 			event.deltaY < 0 ?
 				this.view.zoom * factor :
@@ -94,7 +135,7 @@ PrototypoCanvas.prototype.wheelHandler = function( event ) {
 		difference = viewPos.subtract( this.view.center ),
 		newCenter = viewPos.subtract( difference.multiply(beta) );
 
-	this.view.zoom = newZoom;
+	this.zoom = newZoom;
 	this.view.center = newCenter;
 
 	event.preventDefault();
@@ -124,50 +165,69 @@ PrototypoCanvas.prototype.upHandler = function() {
 };
 
 PrototypoCanvas.prototype.zoomIn = function() {
-	this.view.zoom *= 1 + this.opts.zoomFactor;
+	this.zoom = this.view.zoom * 1 + this.opts.zoomFactor;
 };
 
 PrototypoCanvas.prototype.zoomOut = function() {
-	this.view.zoom /= 1 + this.opts.zoomFactor;
+	this.zoom = this.view.zoom / 1 + this.opts.zoomFactor;
 };
 
-PrototypoCanvas.prototype.zoom = function( zoom ) {
-	this.view.zoom = zoom;
-};
+PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
+	var glyph =
+			// no glyph means we're switching fill mode for the current glyph
+			_glyph === undefined ? this.currGlyph :
+			// accept glyph name and glyph object
+			typeof _glyph === 'string' ? this.font.glyphMap[_glyph] :
+			_glyph;
 
-PrototypoCanvas.prototype.displayGlyph = function( name ) {
-	if ( this.currGlyph === this.font.glyphMap[name] ) {
+	if ( glyph === undefined ) {
 		return;
 	}
 
 	// hide previous glyph
-	if ( this.currGlyph ) {
+	if ( this.currGlyph && this.currGlyph !== glyph ) {
 		this.currGlyph.visible = false;
 		this.currGlyph.components.forEach(function(component) {
 			component.visible = false;
-		});
+		}, this);
 	}
 
-	this.currGlyph = this.font.glyphMap[name];
+	this.currGlyph = glyph;
 
 	// make sure the glyph is up-to-update
-	if ( this.currValues ) {
+	if ( _glyph && this.currValues ) {
 		this.currGlyph.update( this.currValues );
 	}
 
 	// .. and show it
 	this.currGlyph.visible = true;
+
+	if ( this._fill ) {
+		this.currGlyph.fillColor = 'black';
+		this.currGlyph.strokeWidth = 0;
+	} else {
+		this.currGlyph.fillColor = null;
+		this.currGlyph.strokeWidth = 1;
+	}
+
 	this.currGlyph.contours.forEach(function(contour) {
-		contour.visible = !contour.skeleton;
-	});
+		contour.fullySelected = this._showNodes && !contour.skeleton;
+	}, this);
+
 	this.currGlyph.components.forEach(function(component) {
 		component.visible = true;
 		component.contours.forEach(function(contour) {
-			contour.visible = !contour.skeleton;
-		});
-	});
+			contour.fullySelected = this._showNodes && !contour.skeleton;
+		}, this);
+	}, this);
 
 	this.view.update();
+};
+
+PrototypoCanvas.prototype.displayChar = function( code ) {
+	this.displayGlyph( typeof code === 'string' ?
+		this.font.charMap[ code.charCodeAt(0) ] : code
+	);
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
@@ -225,83 +285,13 @@ PrototypoCanvas.prototype.download = function() {
 	this.font.download( this.latestBuffer );
 };
 
-PrototypoCanvas.load = function( opts ) {
-	opts = _.assign({
-		fontUrl: 'font.json',
-		prototypoUrl: 'prototypo.js'
+PrototypoCanvas.load = load;
 
-	}, opts);
-
-	return Promise.all([
-		!opts.fontSource && opts.fontUrl,
-		!workerSource && opts.prototypoUrl
-	].map(function( url ) {
-		return url && fetch( url );
-
-	})).then(function( results ) {
-		return Promise.all([
-			results[0] && results[0].text(),
-			results[1] && results[1].text()
-		]);
-
-	}).then(function( results ) {
-		if ( results[0] ) {
-			opts.fontSource = JSON.parse( results[0] );
-		}
-		if ( results[1] ) {
-			opts.workerSource = workerSource =
-				'(' +
-				shell.toString().replace('\'prototypo.js\';', function() {
-					return results[1];
-				}) +
-				// IIFE power
-				')();' +
-				// For some reason [object Object] is appended to the source
-				// by Firefox when the worker is created, which causes the
-				// script to throw without the following comment.
-				'//';
-		}
-
-		// create the worker
-		return new Promise(function( resolve ) {
-			var worker = new Worker(
-				URL.createObjectURL(
-					new Blob([
-						opts.workerSource,
-						{ type: 'text/javascript' }
-					])
-				)
-			);
-
-			worker.onmessage = function(e) {
-				// load the font
-				if ( e.data.type === 'ready' ) {
-					worker.postMessage({
-						type: 'font',
-						data: results[0]
-					});
-
-				// reuse the solvingOrders computed in the worker (this is a
-				// fairly heavy operation that, better doing it only once,
-				// asynchronously)
-				} else if ( e.data.type === 'solvingOrders' ) {
-					opts.worker = worker;
-					// merge solvingOrders with the source
-					Object.keys( e.data.data ).forEach(function(key) {
-						if ( e.data.data[key] ) {
-							opts.fontSource.glyphs[key].solvingOrder =
-								e.data.data[key];
-						}
-					});
-
-					// We're done with the asynchronous stuff!
-					resolve();
-				}
-			};
-		});
-	}).then(function() {
-		return new PrototypoCanvas( opts );
-	});
-};
+paper.PaperScope.prototype.Path.prototype._drawSelected = _drawSelected;
+_.assign( paper.settings, {
+	handleSize: 6,
+	handleColor: '#FF725E',
+	nodeColor: '#00C4D6'
+});
 
 module.exports = PrototypoCanvas;

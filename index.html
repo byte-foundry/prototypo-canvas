@@ -32,6 +32,7 @@
 				display: block;
 				width: 1024px;
 				font-family: "genese", serif;
+				font-size: 2rem;
 			}
 		</style>
 	</head>
@@ -43,27 +44,12 @@
 			<button id="zoomIn">+</button>
 			<button id="zoomReset">0</button>
 			<button id="zoomOut">-</button>
-			<select id="glyphList">
-				<option value="A_cap">A</option>
-				<option value="B_cap">B</option>
-				<option value="C_cap">C</option>
-				<option value="D_cap">D</option>
-				<option value="E_cap">E</option>
-				<option value="F_cap">F</option>
-				<option value="G_cap">G</option>
-				<option value="H_cap">H</option>
-				<option value="I_cap">I</option>
-				<option value="J_cap">J</option>
-				<option value="K_cap">K</option>
-				<option value="L_cap">L</option>
-				<option value="M_cap">M</option>
-				<option value="N_cap">N</option>
-				<option value="O_cap">O</option>
-				<option value="P_cap">P</option>
-				<option value="Q_cap">Q</option>
-			</select>
+			<input type="text" id="glyphList" maxlength="1" size="1" value="A" />
 			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
 			<button id="export">▾ export</button>
+			<input type="checkbox" id="outline" /><label for="outline">Outline</label>
+			<input type="checkbox" id="nodes" /><label for="nodes">Show nodes</label>
+
 			<textarea id="sample">ABCDEFGHIJKLMNOPQRSTUVWXYZ
 abcdefghijklmnopqrstuvwxyz</textarea>
 		</div>

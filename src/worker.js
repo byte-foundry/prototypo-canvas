@@ -38,9 +38,9 @@ module.exports = function worker() {
 
 	handlers.update = function( params ) {
 		currValues = params;
-console.profile('a');
+
 		font.update( params );
-console.profileEnd('a');
+
 		font.updateOTCommands()
 			.addToFonts();
 	};
