@@ -47,6 +47,15 @@ window.PrototypoCanvas.load({
 	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
 
 }).then(function( instance ) {
+	instance.update( values );
+	instance.subset( alphabet );
+	instance.displayChar( 'A' );
+	$('#glyphList').val('A');
+	$('#sample').val( alphabet );
+	$('#outline').attr({ checked: false });
+	$('#nodes').attr({ checked: false });
+	$('#coords').attr({ checked: false });
+
 	$('#zoomIn').on('click', function() {
 		instance.zoomIn();
 	});
@@ -79,14 +88,9 @@ window.PrototypoCanvas.load({
 	$('#nodes').on('change', function( event ) {
 		instance.showNodes = $(event.target).is(':checked');
 	});
-
-	instance.update( values );
-	instance.subset( alphabet );
-	instance.displayChar( 'A' );
-	$('#glyphList').val('A');
-	$('#sample').val( alphabet );
-	$('#outline').attr({ checked: false });
-	$('#nodes').attr({ checked: false });
+	$('#coords').on('change', function( event ) {
+		instance.showCoords = $(event.target).is(':checked');
+	});
 
 	paper.view.update();
 });

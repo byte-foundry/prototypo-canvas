@@ -7,19 +7,23 @@ var SelectionState = {
 		POINT: 4,
 		SEGMENT: 7 // HANDLE_IN | HANDLE_OUT | POINT
 	},
-	coords = new Float32Array(6);
+	worldCoords = new Float32Array(6),
+	viewCoords = new Float32Array(6);
 
-function drawHandles(ctx, segments, matrix, settings) {
+function drawHandles(ctx, segments, matrix, settings, zoom) {
 	var size = settings.handleSize,
 		half = size / 2,
 		pX,
 		pY;
 
-	function drawHandle(index) {
-		var hX = coords[index],
-			hY = coords[index + 1];
+	function drawHandle(j) {
+		var hX = Math.round( viewCoords[j] ),
+			hY = Math.round( viewCoords[j + 1] ),
+			text;
 
-		if (pX !== hX || pY !== hY) {
+		if ( viewCoords[0] !== viewCoords[j] ||
+				viewCoords[1] !== viewCoords[j + 1]) {
+
 			ctx.beginPath();
 			ctx.strokeStyle = settings.handleColor;
 			ctx.fillStyle = settings.handleColor;
@@ -29,15 +33,40 @@ function drawHandles(ctx, segments, matrix, settings) {
 			ctx.beginPath();
 			ctx.arc(hX, hY, half, 0, Math.PI * 2, true);
 			ctx.fill();
+
+			if ( settings.drawCoords ) {
+				text = Math.round( worldCoords[j] ) + ',' +
+					Math.round( worldCoords[j + 1] );
+
+				// use alpha to reduce the clutter caused by all this text when
+				// zooming out
+				if ( zoom < 1.7 ) {
+					ctx.globalAlpha = 0.2;
+				} else if ( zoom < 3 ) {
+					ctx.globalAlpha = 0.4;
+				}
+				ctx.fillText(
+					text,
+					hX - half - 3 - ctx.measureText(text).width,
+					// The text is slightly above the marker. This avoids
+					// overlapping when the handle vector is horizontal, which
+					// is quite a frequent case.
+					hY - 2
+				);
+				if ( zoom < 3 ) {
+					ctx.globalAlpha = 1;
+				}
+			}
 		}
 	}
 
 	for (var i = 0, l = segments.length; i < l; i++) {
 		var segment = segments[i];
-		segment._transformCoordinates(matrix, coords, false);
+		segment._transformCoordinates(null, worldCoords, false);
+		segment._transformCoordinates(matrix, viewCoords, false);
 		var state = segment._selectionState;
-		pX = coords[0];
-		pY = coords[1];
+		pX = Math.round( viewCoords[0] );
+		pY = Math.round( viewCoords[1] );
 		if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
 			drawHandle(2);
 		}
@@ -47,13 +76,21 @@ function drawHandles(ctx, segments, matrix, settings) {
 		// Draw a rectangle at segment.point:
 		ctx.fillStyle = settings.nodeColor;
 		ctx.fillRect( pX - half, pY - half, size, size );
-		// If the point is not selected, draw a white square that is 1 px
-		// smaller on all sides:
-		if ( !(state & /*#=*/ SelectionState.POINT) ) {
-			var fillStyle = ctx.fillStyle;
-			ctx.fillStyle = '#ffffff';
-			ctx.fillRect(pX - half + 1, pY - half + 1, size - 2, size - 2);
-			ctx.fillStyle = fillStyle;
+		ctx.font = settings.handleFont;
+
+		if ( settings.drawCoords ) {
+			if ( zoom < 1.7 ) {
+				ctx.globalAlpha = 0.4;
+			}
+			ctx.fillText(
+				Math.round( worldCoords[0] ) + ',' +
+				Math.round( worldCoords[1] ),
+				pX + half + 5,
+				pY - 2
+			);
+			if ( zoom < 1.7 ) {
+				ctx.globalAlpha = 1;
+			}
 		}
 	}
 }
@@ -66,7 +103,8 @@ function _drawSelected( ctx, matrix ) {
 		ctx,
 		this._segments,
 		matrix,
-		this._project._scope.settings
+		this._project._scope.settings,
+		this._project._view._zoom
 	);
 }
 

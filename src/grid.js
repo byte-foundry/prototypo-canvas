@@ -53,20 +53,22 @@ Object.defineProperty( Grid.prototype, 'zoom', {
 		this.backgroundCtx.fillStyle = pattern;
 		this.backgroundCtx.fillRect(0, 0, currWidth, currHeight);
 
-		// this.raster.set({
-		// 	// size: [ width * 2, height * 2 ],
-		// 	// `position` set the position of the center of the raster, not its
-		// 	// bottom-right corner. So [width, height] results in a grid
-		// 	// starting at [0, 0].
-		// 	// We need to center the grid while keeping lines aligned with our
-		// 	// vertical and horizontal origin, hence the rounding.
-		// 	// position: [
-		// 	// 	(( width * 2 ) - ( Math.round( width * 2 / 100 ) * 100 )) / 2,
-		// 	// 	(( height * 2 ) - ( Math.round( height * 2 / 100 ) * 100 )) / 2
-		// 	// ]
-		//
-		// });
-		//this.raster.drawImage( this.backgroundCanvas );
+		/*
+		this.raster.set({
+			size: [ width * 2, height * 2 ],
+			`position` set the position of the center of the raster, not its
+			bottom-right corner. So [width, height] results in a grid
+			starting at [0, 0].
+			We need to center the grid while keeping lines aligned with our
+			vertical and horizontal origin, hence the rounding.
+			position: [
+				(( width * 2 ) - ( Math.round( width * 2 / 100 ) * 100 )) / 2,
+				(( height * 2 ) - ( Math.round( height * 2 / 100 ) * 100 )) / 2
+			]
+
+		});
+		this.raster.drawImage( this.backgroundCanvas );
+		*/
 	}
 });
 

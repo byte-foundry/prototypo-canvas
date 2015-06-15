@@ -90,7 +90,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		get: function() {
 			return this.view.zoom;
 		},
-		set: function( zoom ) {
+		set: function( zoom ) {console.log(zoom);
 			this.view.zoom = zoom;
 			// this.grid.zoom = zoom;
 		}
@@ -112,6 +112,15 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 			this._showNodes = bool;
 			this.displayGlyph();
 		}
+	},
+	showCoords: {
+		get: function() {
+			return paper.settings.drawCoords;
+		},
+		set: function( bool ) {
+			paper.settings.drawCoords = bool;
+			this.displayGlyph();
+		}
 	}
 });
 
@@ -124,7 +133,7 @@ PrototypoCanvas.prototype.wheelHandler = function( event ) {
 		viewPos = this.view.viewToProject( currPos ),
 		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
 		factor = 1 + ( this.opts.zoomFactor *
-			( Math.abs(event.deltaY / event.deltaMode ? 3 : 40 ) ) ),
+			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 ) ) ),
 		newZoom =
 			event.deltaY < 0 ?
 				this.view.zoom * factor :
@@ -291,7 +300,9 @@ paper.PaperScope.prototype.Path.prototype._drawSelected = _drawSelected;
 _.assign( paper.settings, {
 	handleSize: 6,
 	handleColor: '#FF725E',
-	nodeColor: '#00C4D6'
+	nodeColor: '#00C4D6',
+	drawCoords: false,
+	handleFont: '12px monospace'
 });
 
 module.exports = PrototypoCanvas;
