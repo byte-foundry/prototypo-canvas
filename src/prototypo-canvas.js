@@ -90,7 +90,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		get: function() {
 			return this.view.zoom;
 		},
-		set: function( zoom ) {console.log(zoom);
+		set: function( zoom ) {
 			this.view.zoom = zoom;
 			// this.grid.zoom = zoom;
 		}
@@ -230,6 +230,7 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 		}, this);
 	}, this);
 
+	this.view._project._needsUpdate = true;
 	this.view.update();
 };
 
