@@ -30,12 +30,13 @@ function load( opts ) {
 
 	}).then(function( results ) {
 		if ( results[0] ) {
-			opts.fontSource = JSON.parse( results[0] );
+			opts.fontSource = results[0];
 		}
 		if ( results[1] ) {
 			opts.prototypoSource = results[1];
 		}
 
+		opts.fontObj = JSON.parse( opts.fontSource );
 		opts.workerSource =
 			'(' +
 			shell.toString().replace('\'prototypo.js\';', function() {
@@ -64,7 +65,7 @@ function load( opts ) {
 				if ( e.data.type === 'ready' ) {
 					worker.postMessage({
 						type: 'font',
-						data: results[0]
+						data: opts.fontSource
 					});
 
 				// reuse the solvingOrders computed in the worker (this is a
@@ -75,7 +76,7 @@ function load( opts ) {
 					// merge solvingOrders with the source
 					Object.keys( e.data.data ).forEach(function(key) {
 						if ( e.data.data[key] ) {
-							opts.fontSource.glyphs[key].solvingOrder =
+							opts.fontObj.glyphs[key].solvingOrder =
 								e.data.data[key];
 						}
 					});

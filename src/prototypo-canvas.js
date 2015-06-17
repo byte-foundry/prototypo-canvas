@@ -64,7 +64,7 @@ function PrototypoCanvas( opts ) {
 
 	// this.grid = new Grid( paper );
 
-	this.font = prototypo.parametricFont( opts.fontSource );
+	this.font = prototypo.parametricFont( opts.fontObj );
 	this.isMousedown = false;
 
 	this.worker.onmessage = fontBufferHandler.bind(this);
