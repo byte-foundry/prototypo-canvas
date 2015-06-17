@@ -35,7 +35,6 @@
   "dependencies": {
     "jquery": "^2.1.4",
     "jquery.wheel.js": "0.2.0",
-    "lodash.assign": "^3.2.0",
     "normalize.css": "^3.0.3",
     "pepjs": "^0.3.0",
     "prototypo.js": "^0.3.1",

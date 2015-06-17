@@ -1,5 +1,5 @@
 var prototypo = require('prototypo.js'),
-	assign = require('lodash.assign'),
+	assign = require('./assignPolyfill'),
 	// Grid = require('./grid'),
 	_drawSelected = require('./drawNodes')._drawSelected,
 	load = require('./load');
