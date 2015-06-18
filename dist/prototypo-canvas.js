@@ -335,6 +335,22 @@ function PrototypoCanvas( opts ) {
 
 		$(document).on( type + 'up', this.upHandler.bind(this) );
 	}
+
+	var raf = window.requestAnimationFrame ||
+			window.webkitRequestAnimationFrame,
+		updateLoop = function() {
+			raf(updateLoop);
+
+			if ( !this.latestRafValues || !this.currGlyph ) {
+				return;
+			}
+
+			this.currGlyph.update( this.latestRafValues );
+			this.view.update();
+			delete this.latestRafValues;
+
+		}.bind(this);
+	updateLoop();
 }
 
 Object.defineProperties( PrototypoCanvas.prototype, {
@@ -493,10 +509,7 @@ PrototypoCanvas.prototype.displayChar = function( code ) {
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
-	if ( this.currGlyph ) {
-		this.currGlyph.update( values );
-		this.view.update();
-	}
+	this.latestRafValues = values;
 
 	if ( !this.isWorkerBusy ) {
 		// block updates
@@ -510,7 +523,7 @@ PrototypoCanvas.prototype.update = function( values ) {
 	// if the worker is already busy, store the latest values so that we can
 	// eventually update the font with the latest values
 	} else {
-		this.latestValues = values;
+		this.latestWorkerValues = values;
 	}
 
 	this.currValues = values;
