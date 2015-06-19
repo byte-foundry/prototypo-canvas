@@ -149,7 +149,7 @@ PrototypoCanvas.prototype.wheelHandler = function( event ) {
 		viewPos = this.view.viewToProject( currPos ),
 		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
 		factor = 1 + ( this.opts.zoomFactor *
-			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 ) ) ),
+			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 ) ) ) / 20,
 		newZoom =
 			event.deltaY < 0 ?
 				this.view.zoom * factor :
@@ -232,7 +232,7 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 		this.currGlyph.strokeWidth = 0;
 	} else {
 		this.currGlyph.fillColor = null;
-		this.currGlyph.strokeWidth = 1;
+		this.currGlyph.strokeWidth = 4;
 	}
 
 	this.currGlyph.contours.forEach(function(contour) {
