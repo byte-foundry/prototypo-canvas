@@ -181,6 +181,10 @@ PrototypoCanvas.prototype.moveHandler = function(event) {
 };
 
 PrototypoCanvas.prototype.downHandler = function(event) {
+	if (event.button && event.button !== 0) {
+		return;
+	}
+
 	this.isMousedown = true;
 	this.prevPos = new paper.Point( event.clientX, event.clientY );
 };
@@ -232,7 +236,8 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 		this.currGlyph.strokeWidth = 0;
 	} else {
 		this.currGlyph.fillColor = null;
-		this.currGlyph.strokeWidth = 4;
+		this.currGlyph.strokeColor = 'black';
+		this.currGlyph.strokeWidth = 1;
 	}
 
 	this.currGlyph.contours.forEach(function(contour) {
