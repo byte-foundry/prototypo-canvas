@@ -1,6 +1,12 @@
-module.exports = function worker() {
-	'prototypo.js';
+if ( 'importScripts' in self ) {
+	// When the worker is loaded by URL, the search fragment must include
+	// the URL of prototypo.js
+	self.importScripts( decodeURIComponent(
+		self.location.search.replace(/(\?|&)bundleurl=(.*?)(&|$)/, '$2')
+	) );
+}
 
+function worker() {
 	var font,
 		handlers = {},
 		currValues;
@@ -64,4 +70,11 @@ module.exports = function worker() {
 
 		font.addToFonts();
 	};
-};
+}
+
+// When the worker is loaded from URL, worker() needs to be called explicitely
+if ( 'importScripts' in self ) {
+	worker();
+} else {
+	module.exports = worker;
+}

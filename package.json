@@ -46,6 +46,7 @@
     "browserify-shim": "^3.8.7",
     "chai": "^2.1.2",
     "deptree": "^0.1.0",
+    "envify": "^3.4.0",
     "eslint": "^0.17.1",
     "eslint-plugin-mocha": "^0.2.2",
     "exorcist": "^0.1.6",

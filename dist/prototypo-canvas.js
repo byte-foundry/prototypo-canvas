@@ -166,7 +166,6 @@ function load( opts ) {
 	opts = _.assign({
 		fontUrl: 'font.json',
 		prototypoUrl: 'prototypo.js'
-
 	}, opts);
 
 	// if the sources are provided
@@ -193,28 +192,30 @@ function load( opts ) {
 		}
 
 		opts.fontObj = JSON.parse( opts.fontSource );
-		opts.workerSource =
-			'(' +
-			shell.toString().replace('\'prototypo.js\';', function() {
-				return opts.prototypoSource;
-			}) +
-			// IIFE power
-			')();' +
-			// For some reason [object Object] is appended to the source
-			// by Firefox when the worker is created, which causes the
-			// script to throw without the following comment.
-			'//';
+		// the worker can be created by specifying the URL of the complete
+		// file (dev environment), or by creating
+		if ( opts.workerUrl ) {
+			// The search fragment of workerUrl must include prototypo.js URL
+			opts.workerUrl +=
+				'?bundleurl=' + encodeURIComponent( opts.prototypoUrl );
+		} else {
+			opts.workerUrl = URL.createObjectURL(
+				new Blob([
+					opts.prototypoSource + ';\n\n' +
+					// IIFE power
+					'(' + shell.toString() + ')();' +
+					// For some reason [object Object] is appended to the source
+					// by Firefox when the worker is created, which causes the
+					// script to throw without the following comment.
+					'//',
+					{ type: 'text/javascript' }
+				])
+			);
+		}
 
 		// create the worker
 		return new Promise(function( resolve ) {
-			var worker = new Worker(
-				URL.createObjectURL(
-					new Blob([
-						opts.workerSource,
-						{ type: 'text/javascript' }
-					])
-				)
-			);
+			var worker = new Worker( opts.workerUrl );
 
 			worker.onmessage = function(e) {
 				// load the font
@@ -579,9 +580,15 @@ _.assign( paper.settings, {
 module.exports = PrototypoCanvas;
 
 },{"./assignPolyfill":1,"./drawNodes":2,"./load":3}],5:[function(require,module,exports){
-module.exports = function worker() {
-	'prototypo.js';
+if ( 'importScripts' in self ) {
+	// When the worker is loaded by URL, the search fragment must include
+	// the URL of prototypo.js
+	self.importScripts( decodeURIComponent(
+		self.location.search.replace(/(\?|&)bundleurl=(.*?)(&|$)/, '$2')
+	) );
+}
 
+function worker() {
 	var font,
 		handlers = {},
 		currValues;
@@ -645,7 +652,14 @@ module.exports = function worker() {
 
 		font.addToFonts();
 	};
-};
+}
+
+// When the worker is loaded from URL, worker() needs to be called explicitely
+if ( 'importScripts' in self ) {
+	worker();
+} else {
+	module.exports = worker;
+}
 
 },{}]},{},[4])(4)
 });

@@ -44,6 +44,9 @@ document.getElementById('main').appendChild( canvasEl );
 window.PrototypoCanvas.load({
 	canvas: canvasEl,
 	fontUrl: 'node_modules/genese.ptf/dist/font.json',
+	// comment the following line to test "production mode", where worker is
+	// built from source instead of file
+	// workerUrl: 'src/worker.js',
 	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
 
 }).then(function( instance ) {
