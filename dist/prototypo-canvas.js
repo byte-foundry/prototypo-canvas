@@ -251,7 +251,7 @@ function load( opts ) {
 module.exports = load;
 
 },{"./assignPolyfill":1,"./worker":5}],4:[function(require,module,exports){
-var prototypo = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null),
+var prototypo = (window.prototypo),
 	assign = require('./assignPolyfill'),
 	// Grid = require('./grid'),
 	_drawSelected = require('./drawNodes')._drawSelected,
@@ -402,7 +402,7 @@ PrototypoCanvas.prototype.wheelHandler = function( event ) {
 		viewPos = this.view.viewToProject( currPos ),
 		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
 		factor = 1 + ( this.opts.zoomFactor *
-			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 ) ) ) / 20,
+			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 * 20 ) ) ),
 		newZoom =
 			event.deltaY < 0 ?
 				this.view.zoom * factor :
