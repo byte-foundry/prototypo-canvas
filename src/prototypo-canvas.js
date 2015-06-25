@@ -262,7 +262,6 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 		this.currGlyph.strokeWidth = 0;
 	} else {
 		this.currGlyph.fillColor = null;
-		this.currGlyph.strokeColor = 'black';
 		this.currGlyph.strokeWidth = 1;
 	}
 

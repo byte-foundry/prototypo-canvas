@@ -511,11 +511,10 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 	this.currGlyph.visible = true;
 
 	if ( this._fill ) {
-		this.currGlyph.fillColor = 'black';
+		this.currGlyph.fillColor = '#333333';
 		this.currGlyph.strokeWidth = 0;
 	} else {
 		this.currGlyph.fillColor = null;
-		this.currGlyph.strokeColor = 'black';
 		this.currGlyph.strokeWidth = 1;
 	}
 
