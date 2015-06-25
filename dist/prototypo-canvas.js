@@ -262,8 +262,10 @@ var _ = { assign: assign },
 
 // handles buffers coming from the worker
 function fontBufferHandler(e) {
+	// prevent the worker to be stuck with a busy flag if this method throws
+	this.isWorkerBusy = false;
+
 	if ( !(e.data instanceof ArrayBuffer) ) {
-		this.isWorkerBusy = false;
 		return;
 	}
 
@@ -272,6 +274,7 @@ function fontBufferHandler(e) {
 
 	// process latest Values
 	if ( this.latestValues ) {
+		this.isWorkerBusy = true;
 		this.worker.postMessage({
 			type: 'update',
 			data: this.latestValues
@@ -280,15 +283,13 @@ function fontBufferHandler(e) {
 		delete this.latestValues;
 
 	} else if ( this.latestSubset ) {
+		this.isWorkerBusy = true;
 		this.worker.postMessage({
 			type: 'subset',
 			data: this.latestSubset
 		});
 
 		delete this.latestSubset;
-
-	} else {
-		this.isWorkerBusy = false;
 	}
 }
 
@@ -502,8 +503,8 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 	this.currGlyph = glyph;
 
 	// make sure the glyph is up-to-update
-	if ( _glyph && this.currValues ) {
-		this.currGlyph.update( this.currValues );
+	if ( _glyph && this.latestValues ) {
+		this.currGlyph.update( this.latestValues );
 	}
 
 	// .. and show it
@@ -540,7 +541,7 @@ PrototypoCanvas.prototype.displayChar = function( code ) {
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
-	this.latestRafValues = values;
+	this.latestValues = this.latestRafValues = values;
 
 	if ( !this.isWorkerBusy ) {
 		// block updates
@@ -556,8 +557,6 @@ PrototypoCanvas.prototype.update = function( values ) {
 	} else {
 		this.latestWorkerValues = values;
 	}
-
-	this.currValues = values;
 };
 
 PrototypoCanvas.prototype.download = function() {
@@ -596,7 +595,7 @@ function worker() {
 	var font,
 		handlers = {},
 		currValues,
-		currSubset;
+		currSubset = [];
 
 	self.postMessage({ type: 'ready' });
 

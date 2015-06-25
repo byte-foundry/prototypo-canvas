@@ -10,7 +10,7 @@ function worker() {
 	var font,
 		handlers = {},
 		currValues,
-		currSubset;
+		currSubset = [];
 
 	self.postMessage({ type: 'ready' });
 
