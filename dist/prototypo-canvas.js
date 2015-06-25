@@ -251,7 +251,7 @@ function load( opts ) {
 module.exports = load;
 
 },{"./assignPolyfill":1,"./worker":5}],4:[function(require,module,exports){
-var prototypo = (window.prototypo),
+var prototypo = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null),
 	assign = require('./assignPolyfill'),
 	// Grid = require('./grid'),
 	_drawSelected = require('./drawNodes')._drawSelected,
@@ -389,6 +389,31 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		set: function( bool ) {
 			paper.settings.drawCoords = bool;
 			this.displayGlyph();
+		}
+	},
+	subset: {
+		get: function() {
+			return this.font.subset;
+		},
+		set: function( set ) {
+			if ( !this.isWorkerBusy ) {
+				if ( this.currSubset !== undefined ) {
+					// block updates
+					this.isWorkerBusy = true;
+				}
+
+				this.worker.postMessage({
+					type: 'subset',
+					data: set
+				});
+
+			// if the worker is already busy, store the latest values so that we
+			// can eventually update the font with the latest values
+			} else {
+				this.latestSubset = set;
+			}
+
+			this.font.subset = this.currSubset = set;
 		}
 	}
 });
@@ -535,27 +560,6 @@ PrototypoCanvas.prototype.update = function( values ) {
 	this.currValues = values;
 };
 
-PrototypoCanvas.prototype.subset = function( string ) {
-	if ( !this.isWorkerBusy ) {
-		if ( this.currSubset !== undefined ) {
-			// block updates
-			this.isWorkerBusy = true;
-		}
-
-		this.worker.postMessage({
-			type: 'subset',
-			data: string
-		});
-
-	// if the worker is already busy, store the latest values so that we can
-	// eventually update the font with the latest values
-	} else {
-		this.latestSubset = string;
-	}
-
-	this.currSubset = string;
-};
-
 PrototypoCanvas.prototype.download = function() {
 	if ( !this.latestBuffer ) {
 		// the UI should wait for the first update to happen before allowing
@@ -591,7 +595,8 @@ if ( 'importScripts' in self ) {
 function worker() {
 	var font,
 		handlers = {},
-		currValues;
+		currValues,
+		currSubset;
 
 	self.postMessage({ type: 'ready' });
 
@@ -626,6 +631,8 @@ function worker() {
 
 	handlers.update = function( params ) {
 		currValues = params;
+		// invalidate the previous subset
+		currSubset = [];
 
 		font.update( params );
 
@@ -633,23 +640,26 @@ function worker() {
 			.addToFonts();
 	};
 
-	handlers.subset = function( string ) {
-		var prevSubset = font.subset || Object.keys( font.charMap );
-		font.subset = string;
-		var currSubset = font.subset || Object.keys( font.charMap );
+	handlers.subset = function( set ) {
+		var prevGlyphs = currSubset.map(function( glyph ) {
+			return glyph.name;
+		});
+		font.subset = set;
+		currSubset = font.subset;
 
-		// search for chars *added* to the subset
-		currSubset.filter(function( code ) {
-			return prevSubset.indexOf( code ) === -1;
+		// search for glyphs *added* to the subset
+		currSubset.filter(function( glyph ) {
+			return prevGlyphs.indexOf( glyph.name ) === -1;
 
 		// update those glyphs
-		}).forEach(function( code ) {
-			if ( font.charMap[code] ) {
-				font.charMap[code].update( currValues );
-				font.updateOTCommands();
-			}
+		}).forEach(function( glyph ) {
+			glyph.update( currValues );
+			glyph.updateOTCommands();
 		});
 
+		// Recreate the correct font.ot.glyphs array, without touching the ot
+		// commands
+		font.updateOTCommands([]);
 		font.addToFonts();
 	};
 }

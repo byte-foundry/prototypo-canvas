@@ -9,7 +9,8 @@ if ( 'importScripts' in self ) {
 function worker() {
 	var font,
 		handlers = {},
-		currValues;
+		currValues,
+		currSubset;
 
 	self.postMessage({ type: 'ready' });
 
@@ -44,6 +45,8 @@ function worker() {
 
 	handlers.update = function( params ) {
 		currValues = params;
+		// invalidate the previous subset
+		currSubset = [];
 
 		font.update( params );
 
@@ -51,23 +54,26 @@ function worker() {
 			.addToFonts();
 	};
 
-	handlers.subset = function( string ) {
-		var prevSubset = font.subset || Object.keys( font.charMap );
-		font.subset = string;
-		var currSubset = font.subset || Object.keys( font.charMap );
+	handlers.subset = function( set ) {
+		var prevGlyphs = currSubset.map(function( glyph ) {
+			return glyph.name;
+		});
+		font.subset = set;
+		currSubset = font.subset;
 
-		// search for chars *added* to the subset
-		currSubset.filter(function( code ) {
-			return prevSubset.indexOf( code ) === -1;
+		// search for glyphs *added* to the subset
+		currSubset.filter(function( glyph ) {
+			return prevGlyphs.indexOf( glyph.name ) === -1;
 
 		// update those glyphs
-		}).forEach(function( code ) {
-			if ( font.charMap[code] ) {
-				font.charMap[code].update( currValues );
-				font.updateOTCommands();
-			}
+		}).forEach(function( glyph ) {
+			glyph.update( currValues );
+			glyph.updateOTCommands();
 		});
 
+		// Recreate the correct font.ot.glyphs array, without touching the ot
+		// commands
+		font.updateOTCommands([]);
 		font.addToFonts();
 	};
 }

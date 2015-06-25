@@ -46,12 +46,11 @@ window.PrototypoCanvas.load({
 	fontUrl: 'node_modules/genese.ptf/dist/font.json',
 	// comment the following line to test "production mode", where worker is
 	// built from source instead of file
-	// workerUrl: 'src/worker.js',
+	workerUrl: 'src/worker.js',
 	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
 
 }).then(function( instance ) {
 	instance.update( values );
-	instance.subset( alphabet );
 	instance.displayChar( 'A' );
 	$('#glyphList').val('A');
 	$('#sample').val( alphabet );
@@ -83,7 +82,7 @@ window.PrototypoCanvas.load({
 		instance.download();
 	});
 	$('#sample').on('input', function( event ) {
-		instance.subset( event.target.value );
+		instance.subset = event.target.value;
 	});
 	$('#outline').on('change', function( event ) {
 		instance.fill = !$(event.target).is(':checked');

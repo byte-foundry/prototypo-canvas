@@ -137,6 +137,31 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 			paper.settings.drawCoords = bool;
 			this.displayGlyph();
 		}
+	},
+	subset: {
+		get: function() {
+			return this.font.subset;
+		},
+		set: function( set ) {
+			if ( !this.isWorkerBusy ) {
+				if ( this.currSubset !== undefined ) {
+					// block updates
+					this.isWorkerBusy = true;
+				}
+
+				this.worker.postMessage({
+					type: 'subset',
+					data: set
+				});
+
+			// if the worker is already busy, store the latest values so that we
+			// can eventually update the font with the latest values
+			} else {
+				this.latestSubset = set;
+			}
+
+			this.font.subset = this.currSubset = set;
+		}
 	}
 });
 
@@ -280,27 +305,6 @@ PrototypoCanvas.prototype.update = function( values ) {
 	}
 
 	this.currValues = values;
-};
-
-PrototypoCanvas.prototype.subset = function( string ) {
-	if ( !this.isWorkerBusy ) {
-		if ( this.currSubset !== undefined ) {
-			// block updates
-			this.isWorkerBusy = true;
-		}
-
-		this.worker.postMessage({
-			type: 'subset',
-			data: string
-		});
-
-	// if the worker is already busy, store the latest values so that we can
-	// eventually update the font with the latest values
-	} else {
-		this.latestSubset = string;
-	}
-
-	this.currSubset = string;
 };
 
 PrototypoCanvas.prototype.download = function() {
