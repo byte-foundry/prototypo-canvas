@@ -273,14 +273,14 @@ function fontBufferHandler(e) {
 	this.font.addToFonts( e.data );
 
 	// process latest Values
-	if ( this.latestValues ) {
+	if ( this.latestWorkerValues ) {
 		this.isWorkerBusy = true;
 		this.worker.postMessage({
 			type: 'update',
-			data: this.latestValues
+			data: this.latestWorkerValues
 		});
 
-		delete this.latestValues;
+		delete this.latestWorkerValues;
 
 	} else if ( this.latestSubset ) {
 		this.isWorkerBusy = true;
@@ -540,6 +540,10 @@ PrototypoCanvas.prototype.displayChar = function( code ) {
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
+	// latestValues are used in displayGlyph
+	// latestWorkerValues is used and disposed by the fontBufferHandler
+	// latestRafValues is used and disposed by the raf loop
+	// so we need all three!
 	this.latestValues = this.latestRafValues = values;
 
 	if ( !this.isWorkerBusy ) {
