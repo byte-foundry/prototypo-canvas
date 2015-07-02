@@ -1,8 +1,8 @@
 var shell = require('./worker'),
-	assign = require('./assignPolyfill');
+	assign = require('es6-object-assign').assign;
 
 var _ = { assign: assign },
-	URL = window.URL || window.webkitURL;
+	URL = global.URL || global.webkitURL;
 
 function load( opts ) {
 	var PrototypoCanvas = this;
