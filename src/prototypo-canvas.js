@@ -1,5 +1,6 @@
-var prototypo = require('prototypo.js'),
-	assign = require('./assignPolyfill'),
+// we need the explicit path for Prototypo, since we use browserify-shim
+var prototypo = require('../node_modules/prototypo.js'),
+	assign = require('es6-object-assign').assign,
 	// Grid = require('./grid'),
 	_drawSelected = require('./drawNodes')._drawSelected,
 	load = require('./load');

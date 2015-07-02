@@ -33,6 +33,7 @@
     "prototypojs"
   ],
   "dependencies": {
+    "es6-object-assign": "^1.0.1",
     "jquery": "^2.1.4",
     "jquery.wheel.js": "0.2.0",
     "normalize.css": "^3.0.3",
