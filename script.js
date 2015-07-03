@@ -78,6 +78,10 @@ window.PrototypoCanvas.load({
 		values.thickness = +event.target.value;
 		instance.update( values );
 	});
+	$('#slant').on('input', function( event ) {
+		values.slant = +event.target.value;
+		instance.update( values );
+	});
 	$('#export').on('click', function() {
 		instance.download();
 	});

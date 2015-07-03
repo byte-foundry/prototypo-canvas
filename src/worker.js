@@ -1,4 +1,4 @@
-if ( !global && 'importScripts' in self ) {
+if ( typeof global === 'undefined' && 'importScripts' in self ) {
 	// When the worker is loaded by URL, the search fragment must include
 	// the URL of prototypo.js
 	self.importScripts( decodeURIComponent(
@@ -49,7 +49,10 @@ function worker() {
 		currSubset = [];
 
 		font.update( params );
-
+		// the following is required so that the globalMatrix of glyphs takes
+		// the font matrix into account. I assume this is done in the main
+		// thread when calling view.update();
+		font._project._updateVersion++;
 		font.updateOTCommands()
 			.addToFonts();
 	};
@@ -79,7 +82,7 @@ function worker() {
 }
 
 // When the worker is loaded from URL, worker() needs to be called explicitely
-if ( !global && 'importScripts' in self ) {
+if ( typeof global === 'undefined' && 'importScripts' in self ) {
 	worker();
 } else {
 	module.exports = worker;

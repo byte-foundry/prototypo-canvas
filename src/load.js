@@ -2,7 +2,7 @@ var shell = require('./worker'),
 	assign = require('es6-object-assign').assign;
 
 var _ = { assign: assign },
-	URL = global.URL || global.webkitURL;
+	URL = typeof window !== 'undefined' && ( window.URL || window.webkitURL );
 
 function load( opts ) {
 	var PrototypoCanvas = this;

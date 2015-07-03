@@ -1,5 +1,6 @@
+/* eslint-disable no-mixed-requires */
 var expect = require('../node_modules/chai').expect,
-	prototypo = require('../node_modules/prototypo.js'),
+	prototypo = global.prototypo = require('../node_modules/prototypo.js'),
 	PrototypoCanvas = require('../dist/prototypo-canvas');
 
 describe('prototypo-canvas', function() {
