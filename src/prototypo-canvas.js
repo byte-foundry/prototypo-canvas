@@ -1,44 +1,12 @@
 var prototypo = require('prototypo.js'),
 	assign = require('es6-object-assign').assign,
 	// Grid = require('./grid'),
+	fontBufferHandler = require('./fontBufferHandler'),
 	_drawSelected = require('./drawNodes')._drawSelected,
 	load = require('./load');
 
 var _ = { assign: assign },
 	paper = prototypo.paper;
-
-// handles buffers coming from the worker
-function fontBufferHandler(e) {
-	// prevent the worker to be stuck with a busy flag if this method throws
-	this.isWorkerBusy = false;
-
-	if ( !(e.data instanceof ArrayBuffer) ) {
-		return;
-	}
-
-	this.latestBuffer = e.data;
-	this.font.addToFonts( e.data );
-
-	// process latest Values
-	if ( this.latestWorkerValues ) {
-		this.isWorkerBusy = true;
-		this.worker.postMessage({
-			type: 'update',
-			data: this.latestWorkerValues
-		});
-
-		delete this.latestWorkerValues;
-
-	} else if ( this.latestSubset ) {
-		this.isWorkerBusy = true;
-		this.worker.postMessage({
-			type: 'subset',
-			data: this.latestSubset
-		});
-
-		delete this.latestSubset;
-	}
-}
 
 // constructor
 function PrototypoCanvas( opts ) {
@@ -68,7 +36,9 @@ function PrototypoCanvas( opts ) {
 	this.font = prototypo.parametricFont( opts.fontObj );
 	this.isMousedown = false;
 
-	this.worker.onmessage = fontBufferHandler.bind(this);
+	if ( this.worker ) {
+		this.worker.onmessage = fontBufferHandler.bind(this);
+	}
 
 	// jQuery is an optional dependency
 	if ( ( 'jQuery' in window ) && this.opts.jQueryListeners ) {
@@ -144,7 +114,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 			return this.font.subset;
 		},
 		set: function( set ) {
-			if ( !this.isWorkerBusy ) {
+			if ( this.worker && !this.isWorkerBusy ) {
 				if ( this.currSubset !== undefined ) {
 					// block updates
 					this.isWorkerBusy = true;
@@ -293,7 +263,7 @@ PrototypoCanvas.prototype.update = function( values ) {
 	// so we need all three!
 	this.latestValues = this.latestRafValues = values;
 
-	if ( !this.isWorkerBusy ) {
+	if ( this.worker && !this.isWorkerBusy ) {
 		// block updates
 		this.isWorkerBusy = true;
 
@@ -309,18 +279,42 @@ PrototypoCanvas.prototype.update = function( values ) {
 	}
 };
 
-PrototypoCanvas.prototype.download = function() {
-	if ( !this.latestBuffer ) {
+PrototypoCanvas.prototype.download = function( name, cb ) {
+	if ( !this.worker || !this.latestValues || this.fontCb ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
 		return;
 	}
 
-	this.font.download( this.latestBuffer );
+	this.fontCb = cb || true;
+	this.isWorkerBusy = true;
+
+	// We don't care if the worker is busy here
+	this.worker.postMessage({
+		type: 'otfFont'
+	});
+};
+
+PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
+	if ( !this.worker || !this.latestValues || this.fontCb ) {
+		// the UI should wait for the first update to happen before allowing
+		// the download button to be clicked
+		return;
+	}
+
+	// We don't care if the worker is busy here
+	this.fontCb = cb || true;
+	this.isWorkerBusy = true;
+
+	// We don't care if the worker is busy here
+	this.worker.postMessage({
+		type: 'svgFont'
+	});
 };
 
 PrototypoCanvas.load = load;
 
+// overwrite the appearance of #selected items in paper.js
 paper.PaperScope.prototype.Path.prototype._drawSelected = _drawSelected;
 _.assign( paper.settings, {
 	handleSize: 6,
