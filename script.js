@@ -34,7 +34,7 @@ var canvasEl = document.createElement('canvas'),
 		ascenderHeight: 750,
 		spacing: 1.1
 	},
-	alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz';
+	alphabet = 'bcdefg';
 	// alphabet = 'A';
 
 canvasEl.width = 1024;
@@ -44,7 +44,7 @@ document.getElementById('main').appendChild( canvasEl );
 
 window.PrototypoCanvas.load({
 	canvas: canvasEl,
-	fontUrl: 'node_modules/genese.ptf/dist/font.json',
+	fontUrl: 'node_modules/venus.ptf/dist/font.json',
 	// comment the following line to test "production mode", where worker is
 	// built from source instead of file
 	workerUrl: 'src/worker.js',
@@ -52,8 +52,9 @@ window.PrototypoCanvas.load({
 
 }).then(function( instance ) {
 	instance.update( values );
-	instance.displayChar( 'A' );
-	$('#glyphList').val('A');
+	instance.displayChar( 'a' );
+	instance.subset = 'bcdefg';
+	$('#glyphList').val('a');
 	$('#sample').val( alphabet );
 	$('#outline').attr({ checked: false });
 	$('#nodes').attr({ checked: false });
@@ -97,6 +98,16 @@ window.PrototypoCanvas.load({
 	});
 	$('#coords').on('change', function( event ) {
 		instance.showCoords = $(event.target).is(':checked');
+	});
+	$('#load-venus').on('click', function( event ) {
+		instance.changeFont({
+			fontUrl: 'node_modules/venus.ptf/dist/font.json'
+		});
+	});
+	$('#load-john').on('click', function( event ) {
+		instance.changeFont({
+			fontUrl: 'node_modules/john-fell.ptf/dist/font.json'
+		});
 	});
 
 	paper.view.update();

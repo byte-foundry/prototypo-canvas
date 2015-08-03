@@ -3,7 +3,9 @@ var prototypo = require('prototypo.js'),
 	// Grid = require('./grid'),
 	fontBufferHandler = require('./fontBufferHandler'),
 	_drawSelected = require('./drawNodes')._drawSelected,
-	load = require('./load');
+	utils = require('./load'),
+	load = utils.load,
+	changeFont = utils.changeFont;
 
 var _ = { assign: assign },
 	paper = prototypo.paper;
@@ -129,6 +131,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 			// can eventually update the font with the latest values
 			} else {
 				this.latestSubset = set;
+				this.saveSubset = set;
 			}
 
 			this.font.subset = this.currSubset = set;
@@ -251,6 +254,7 @@ PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
 };
 
 PrototypoCanvas.prototype.displayChar = function( code ) {
+	this.latestChar = code;
 	this.displayGlyph( typeof code === 'string' ?
 		this.font.charMap[ code.charCodeAt(0) ] : code
 	);
@@ -258,7 +262,7 @@ PrototypoCanvas.prototype.displayChar = function( code ) {
 
 PrototypoCanvas.prototype.update = function( values ) {
 	// latestValues are used in displayGlyph
-	// latestWorkerValues is used and disposed by the fontBufferHandler
+	// latestWorkerValues is used and disposed by th/sue fontBufferHandler
 	// latestRafValues is used and disposed by the raf loop
 	// so we need all three!
 	this.latestValues = this.latestRafValues = values;
@@ -311,6 +315,26 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		type: 'svgFont'
 	});
 };
+
+PrototypoCanvas.prototype.changeFont = function( opts ) {
+	return changeFont( opts );
+}
+
+PrototypoCanvas.prototype.loadFont = function( opts ) {
+	this.worker.onmessage = fontBufferHandler.bind(this);
+	this.font = prototypo.parametricFont( opts.fontObj );
+
+	// Ok I think I know how it works now.
+	// getGlyphSubset return a whole subset when you call update in the worker (don't know why)
+	// So if the font is not complete when you call update the font is incomplete and
+	// cannot be loaded with window.FontFace.
+	// When you load an incomplete font you have to call the subset getter to load the font
+	// properly
+	// displayChar is called to update the whole glyph in canvas.
+	this.update( this.latestValues, this.subset );
+	this.subset = this.saveSubset;
+	this.displayChar( this.latestChar );
+}
 
 PrototypoCanvas.load = load;
 
