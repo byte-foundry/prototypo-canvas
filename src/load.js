@@ -4,6 +4,9 @@ var shell = require('./worker'),
 var _ = { assign: assign },
 	URL = typeof window !== 'undefined' && ( window.URL || window.webkitURL );
 
+var worker,
+	instance;
+
 function load( opts ) {
 	var PrototypoCanvas = this;
 
@@ -59,7 +62,7 @@ function load( opts ) {
 
 		// create the worker
 		return new Promise(function( resolve ) {
-			var worker = new Worker( opts.workerUrl );
+			worker = new Worker( opts.workerUrl );
 
 			worker.onmessage = function(e) {
 				// load the font
@@ -88,8 +91,61 @@ function load( opts ) {
 			};
 		});
 	}).then(function() {
-		return new PrototypoCanvas( opts );
+		instance = new PrototypoCanvas( opts );
+		return instance;
 	});
 }
 
-module.exports = load;
+function changeFont( opts, values ) {
+
+	return Promise.all([
+		!opts.fontSource && opts.fontUrl
+	].map(function( url ) {
+		// only fetch the resources if we have just the url, not the source
+		return url && fetch( url );
+
+	})).then(function( results ) {
+		// parse fetched resources
+		return Promise.all([
+			results[0] && results[0].text()
+		]);
+
+	}).then(function( results ) {
+		if ( results[0] ) {
+			opts.fontSource = results[0];
+		}
+
+		opts.fontObj = JSON.parse( opts.fontSource );
+		return new Promise(function( resolve ) {
+
+			worker.postMessage({
+				type: 'font',
+				data: opts.fontSource
+			});
+
+			worker.onmessage = function(e) {
+				// load the font
+				if ( e.data.type === 'solvingOrders' ) {
+					opts.worker = worker;
+					// merge solvingOrders with the source
+					Object.keys( e.data.data ).forEach(function(key) {
+						if ( e.data.data[key] ) {
+							opts.fontObj.glyphs[key].solvingOrder =
+								e.data.data[key];
+						}
+					});
+
+					// We're done with the asynchronous stuff!
+					resolve();
+				}
+			};
+		});
+	}).then(function() {
+		instance.loadFont( opts );
+	});
+}
+
+module.exports = {
+	load: load,
+	changeFont: changeFont
+};
