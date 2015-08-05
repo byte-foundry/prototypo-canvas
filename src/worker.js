@@ -9,6 +9,7 @@ if ( typeof global === 'undefined' && 'importScripts' in self ) {
 function worker() {
 	var font,
 		handlers = {},
+		fontRegister = {},
 		currValues,
 		currSubset = [];
 
@@ -31,7 +32,15 @@ function worker() {
 	};
 
 	handlers.font = function( fontSource ) {
-		font = prototypo.parametricFont( JSON.parse( fontSource ) );
+		var fontObj = JSON.parse( fontSource );
+
+		if ( fontRegister[fontObj.fontinfo.familyName] ) {
+			font = fontRegister[fontObj.fontinfo.familyName];
+		} else {
+			font = prototypo.parametricFont(fontObj);
+			fontRegister[fontObj.fontinfo.familyName] = font;
+		}
+
 		var solvingOrders = {};
 		Object.keys( font.glyphMap ).forEach(function(key) {
 			solvingOrders[key] = font.glyphMap[key].solvingOrder;

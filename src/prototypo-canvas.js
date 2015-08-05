@@ -32,10 +32,12 @@ function PrototypoCanvas( opts ) {
 	this.worker = opts.worker;
 	this._fill = this.opts.fill;
 	this._showNodes = this.opts.showNodes;
+	this.fontRegister = {};
 
 	// this.grid = new Grid( paper );
 
 	this.font = prototypo.parametricFont( opts.fontObj );
+	this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
 	this.isMousedown = false;
 
 	if ( this.worker ) {
@@ -322,7 +324,12 @@ PrototypoCanvas.prototype.changeFont = function( opts ) {
 
 PrototypoCanvas.prototype.loadFont = function( opts ) {
 	this.worker.onmessage = fontBufferHandler.bind(this);
-	this.font = prototypo.parametricFont( opts.fontObj );
+	if ( this.fontRegister[opts.fontObj.fontinfo.familyName] ) {
+		this.font = this.fontRegister[opts.fontObj.fontinfo.familyName];
+	} else {
+		this.font = prototypo.parametricFont( opts.fontObj );
+		this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
+	}
 
 	// Ok I think I know how it works now.
 	// getGlyphSubset return a whole subset when you call update in the worker (don't know why)
