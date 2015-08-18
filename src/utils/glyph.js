@@ -1,3 +1,56 @@
+function displayGlyph( _glyph ) {
+	var glyph =
+			// no glyph means we're switching fill mode for the current glyph
+			_glyph === undefined ? this.currGlyph :
+			// accept glyph name and glyph object
+			typeof _glyph === 'string' ? this.font.glyphMap[_glyph] :
+			_glyph;
+
+	if ( glyph === undefined ) {
+		return;
+	}
+
+	// hide previous glyph
+	if ( this.currGlyph && this.currGlyph !== glyph ) {
+		this.currGlyph.visible = false;
+		this.currGlyph.components.forEach(function(component) {
+			component.visible = false;
+		}, this);
+	}
+
+	this.currGlyph = glyph;
+
+	// make sure the glyph is up-to-update
+	if ( _glyph && this.latestValues ) {
+		this.currGlyph.update( this.latestValues );
+	}
+
+	// .. and show it
+	this.currGlyph.visible = true;
+
+	if ( this._fill ) {
+		this.currGlyph.fillColor = '#333333';
+		this.currGlyph.strokeWidth = 0;
+	} else {
+		this.currGlyph.fillColor = null;
+		this.currGlyph.strokeWidth = 1;
+	}
+
+	this.currGlyph.contours.forEach(function(contour) {
+		contour.fullySelected = this._showNodes && !contour.skeleton;
+	}, this);
+
+	this.currGlyph.components.forEach(function(component) {
+		component.visible = true;
+		component.contours.forEach(function(contour) {
+			contour.fullySelected = this._showNodes && !contour.skeleton;
+		}, this);
+	}, this);
+
+	this.view._project._needsUpdate = true;
+	this.view.update();
+}
+
 // Path#_selectedSegmentState is the addition of all segment's states, and is
 // compared with SelectionState.SEGMENT, the combination of all SelectionStates
 // to see if all segments are fully selected.
@@ -108,4 +161,7 @@ function _drawSelected( ctx, matrix ) {
 	);
 }
 
-module.exports = { _drawSelected: _drawSelected };
+module.exports = {
+	displayGlyph: displayGlyph,
+	_drawSelected: _drawSelected
+};

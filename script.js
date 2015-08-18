@@ -42,13 +42,15 @@ canvasEl.height = 1024;
 
 document.getElementById('main').appendChild( canvasEl );
 
-window.PrototypoCanvas.load({
+window.PrototypoCanvas.init({
 	canvas: canvasEl,
-	fontUrl: 'node_modules/venus.ptf/dist/font.json',
 	// comment the following line to test "production mode", where worker is
 	// built from source instead of file
 	workerUrl: 'src/worker.js',
 	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
+}).then(function( instance ) {
+	return instance.loadFont(
+		'john-fell', 'node_modules/john-fell.ptf/dist/font.json');
 
 }).then(function( instance ) {
 	instance.update( values );
@@ -99,15 +101,22 @@ window.PrototypoCanvas.load({
 	$('#coords').on('change', function( event ) {
 		instance.showCoords = $(event.target).is(':checked');
 	});
-	$('#load-venus').on('click', function( event ) {
-		instance.changeFont({
-			fontUrl: 'node_modules/venus.ptf/dist/font.json'
+	$('#load-venus').on('click', function() {
+		instance.loadFont(
+			'grotesk', 'node_modules/venus.ptf/dist/font.json'
+		).then(function() {
+			instance.update( values );
+			$('#sample')[0].style.fontFamily = '"Prototypo Grotesk"';
 		});
 	});
-	$('#load-john').on('click', function( event ) {
-		instance.changeFont({
-			fontUrl: 'node_modules/john-fell.ptf/dist/font.json'
+	$('#load-john').on('click', function() {
+		instance.loadFont(
+			'john-fell', 'node_modules/john-fell.ptf/dist/font.json'
+		).then(function() {
+			instance.update( values );
+			$('#sample')[0].style.fontFamily = '"Prototypo John Fell"';
 		});
+
 	});
 
 	paper.view.update();

@@ -9,9 +9,20 @@ if ( typeof global === 'undefined' && 'importScripts' in self ) {
 function worker() {
 	var font,
 		handlers = {},
-		fontRegister = {},
+		fontsMap = {},
 		currValues,
-		currSubset = [];
+		currSubset = [],
+		translateSubset = function() {
+			if ( !currSubset.length ) {
+				return;
+			}
+
+			font.subset = currSubset.map(function( glyph ) {
+				return font.charMap[ glyph.ot.unicode ];
+			}).filter(function( glyph ) { return glyph; });
+
+			currSubset = font.subset;
+		};
 
 	self.postMessage({ type: 'ready' });
 
@@ -20,26 +31,25 @@ function worker() {
 		height: 1024
 	});
 
-	// Overwrite addToFonts to send the buffer over to the UI
-	prototypo.paper.Font.prototype.addToFonts = function() {
-		var buffer = this.ot.toBuffer();
-		self.postMessage( buffer, [ buffer ] );
-	};
-
 	// mini router
 	self.onmessage = function(e) {
-		handlers[ e.data.type ]( e.data.data );
+		handlers[ e.data.type ]( e.data.data, e.data.name );
 	};
 
-	handlers.font = function( fontSource ) {
+	handlers.font = function( fontSource, name ) {
+		// TODO: this should be done using a memoizing table of limited size
+		if ( name in fontsMap ) {
+			font = fontsMap[name];
+			translateSubset();
+			return;
+		}
+
 		var fontObj = JSON.parse( fontSource );
 
-		if ( fontRegister[fontObj.fontinfo.familyName] ) {
-			font = fontRegister[fontObj.fontinfo.familyName];
-		} else {
-			font = prototypo.parametricFont(fontObj);
-			fontRegister[fontObj.fontinfo.familyName] = font;
-		}
+		font = prototypo.parametricFont(fontObj);
+		fontsMap[name] = font;
+
+		translateSubset();
 
 		var solvingOrders = {};
 		Object.keys( font.glyphMap ).forEach(function(key) {
@@ -54,16 +64,18 @@ function worker() {
 
 	handlers.update = function( params ) {
 		currValues = params;
-		// invalidate the previous subset
-		currSubset = [];
+		// Why did I do that?
+		// // invalidate the previous subset
+		// currSubset = [];
 
 		font.update( params );
 		// the following is required so that the globalMatrix of glyphs takes
 		// the font matrix into account. I assume this is done in the main
 		// thread when calling view.update();
 		font._project._updateVersion++;
-		font.updateOTCommands()
-			.addToFonts();
+		font.updateOTCommands();
+		var buffer = font.ot.toBuffer();
+		self.postMessage( buffer, [ buffer ] );
 	};
 
 	handlers.subset = function( set ) {
@@ -86,7 +98,8 @@ function worker() {
 		// Recreate the correct font.ot.glyphs array, without touching the ot
 		// commands
 		font.updateOTCommands([]);
-		font.addToFonts();
+		var buffer = font.ot.toBuffer();
+		self.postMessage( buffer, [ buffer ] );
 	};
 }
 

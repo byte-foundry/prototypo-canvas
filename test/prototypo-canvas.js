@@ -11,7 +11,7 @@ describe('prototypo-canvas', function() {
 		it('loads correctly', function() {
 			expect(prototypo).to.be.a('function');
 			expect(PrototypoCanvas).to.be.a('function');
-			expect(PrototypoCanvas.load).to.be.a('function');
+			expect(PrototypoCanvas.init).to.be.a('function');
 		});
 	});
 });

@@ -1,11 +1,11 @@
 var prototypo = require('prototypo.js'),
 	assign = require('es6-object-assign').assign,
 	// Grid = require('./grid'),
-	fontBufferHandler = require('./fontBufferHandler'),
-	_drawSelected = require('./drawNodes')._drawSelected,
-	utils = require('./load'),
-	load = utils.load,
-	changeFont = utils.changeFont;
+	glyph = require('./utils/glyph'),
+	mouseHandlers = require('./utils/mouseHandlers'),
+	workerHandlers = require('./utils/workerHandlers'),
+	init = require('./utils/init'),
+	loadFont = require('./utils/loadFont');
 
 var _ = { assign: assign },
 	paper = prototypo.paper;
@@ -30,21 +30,37 @@ function PrototypoCanvas( opts ) {
 	this.project.activeLayer.applyMatrix = false;
 	this.project.activeLayer.scale( 1, -1 );
 	this.worker = opts.worker;
+	this._queue = [];
 	this._fill = this.opts.fill;
 	this._showNodes = this.opts.showNodes;
-	this.fontRegister = {};
+	this.fontsMap = {};
+	this.isMousedown = false;
 
 	// this.grid = new Grid( paper );
 
-	this.font = prototypo.parametricFont( opts.fontObj );
-	this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
-	this.isMousedown = false;
-
+	// bind workerHandlers
 	if ( this.worker ) {
-		this.worker.onmessage = fontBufferHandler.bind(this);
+		this.worker.addEventListener('message', function(e) {
+			// the job might have been cancelled
+			if ( !this.currentJob ) {
+				return;
+			}
+
+			// execute the appropriate handler, according to the type of the
+			// current job.
+			var result = this[ this.currentJob.type + 'Handler' ](e);
+
+			if ( this.currentJob.callback ) {
+				this.currentJob.callback( result );
+			}
+
+			this.currentJob = false;
+			this.dequeue();
+
+		}.bind(this));
 	}
 
-	// jQuery is an optional dependency
+	// bind mouseHandlers (jQuery is an optional dependency)
 	if ( ( 'jQuery' in window ) && this.opts.jQueryListeners ) {
 		var $ = window.jQuery,
 			type = ( 'PointerEventsPolyfill' in window ) ||
@@ -59,6 +75,7 @@ function PrototypoCanvas( opts ) {
 		$(document).on( type + 'up', this.upHandler.bind(this) );
 	}
 
+	// setup raf loop
 	var raf = window.requestAnimationFrame ||
 			window.webkitRequestAnimationFrame,
 		updateLoop = function() {
@@ -75,6 +92,10 @@ function PrototypoCanvas( opts ) {
 		}.bind(this);
 	updateLoop();
 }
+
+PrototypoCanvas.init = init;
+PrototypoCanvas.prototype.loadFont = loadFont;
+_.assign( PrototypoCanvas.prototype, mouseHandlers, workerHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
 	zoom: {
@@ -118,148 +139,64 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 			return this.font.subset;
 		},
 		set: function( set ) {
-			if ( this.worker && !this.isWorkerBusy ) {
-				if ( this.currSubset !== undefined ) {
-					// block updates
-					this.isWorkerBusy = true;
-				}
-
-				this.worker.postMessage({
-					type: 'subset',
-					data: set
-				});
-
-			// if the worker is already busy, store the latest values so that we
-			// can eventually update the font with the latest values
-			} else {
-				this.latestSubset = set;
-				this.saveSubset = set;
-			}
+			this.enqueue({
+				type: 'subset',
+				data: set
+			});
 
 			this.font.subset = this.currSubset = set;
 		}
 	}
 });
 
-PrototypoCanvas.prototype.wheelHandler = function( event ) {
-	var bcr = this.canvas.getBoundingClientRect(),
-		currPos = new paper.Point(
-			event.clientX - bcr.left,
-			event.clientY - bcr.top
-		),
-		viewPos = this.view.viewToProject( currPos ),
-		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
-		factor = 1 + ( this.opts.zoomFactor *
-			( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 * 20 ) ) ),
-		newZoom =
-			event.deltaY < 0 ?
-				this.view.zoom * factor :
-				event.deltaY > 0 ?
-					this.view.zoom / factor :
-					this.view.zoom,
-		beta = this.view.zoom / newZoom,
-		difference = viewPos.subtract( this.view.center ),
-		newCenter = viewPos.subtract( difference.multiply(beta) );
-
-	this.zoom = newZoom;
-	this.view.center = newCenter;
-
-	event.preventDefault();
-};
-
-PrototypoCanvas.prototype.moveHandler = function(event) {
-	if ( !this.isMousedown ) {
-		return;
-	}
-
-	var currPos = new paper.Point( event.clientX, event.clientY ),
-		delta = currPos.subtract( this.prevPos );
-
-	this.prevPos = currPos;
-
-	this.view.center = this.view.center.subtract(
-			delta.divide( this.view.zoom ) );
-};
-
-PrototypoCanvas.prototype.downHandler = function(event) {
-	if (event.button && event.button !== 0) {
-		return;
-	}
-
-	this.isMousedown = true;
-	this.prevPos = new paper.Point( event.clientX, event.clientY );
-};
-
-PrototypoCanvas.prototype.upHandler = function() {
-	this.isMousedown = false;
-};
-
-PrototypoCanvas.prototype.zoomIn = function() {
-	this.zoom = this.view.zoom * 1 + this.opts.zoomFactor;
-};
-
-PrototypoCanvas.prototype.zoomOut = function() {
-	this.zoom = this.view.zoom / 1 + this.opts.zoomFactor;
-};
-
-PrototypoCanvas.prototype.displayGlyph = function( _glyph ) {
-	var glyph =
-			// no glyph means we're switching fill mode for the current glyph
-			_glyph === undefined ? this.currGlyph :
-			// accept glyph name and glyph object
-			typeof _glyph === 'string' ? this.font.glyphMap[_glyph] :
-			_glyph;
-
-	if ( glyph === undefined ) {
-		return;
-	}
-
-	// hide previous glyph
-	if ( this.currGlyph && this.currGlyph !== glyph ) {
-		this.currGlyph.visible = false;
-		this.currGlyph.components.forEach(function(component) {
-			component.visible = false;
-		}, this);
-	}
-
-	this.currGlyph = glyph;
-
-	// make sure the glyph is up-to-update
-	if ( _glyph && this.latestValues ) {
-		this.currGlyph.update( this.latestValues );
-	}
-
-	// .. and show it
-	this.currGlyph.visible = true;
-
-	if ( this._fill ) {
-		this.currGlyph.fillColor = '#333333';
-		this.currGlyph.strokeWidth = 0;
-	} else {
-		this.currGlyph.fillColor = null;
-		this.currGlyph.strokeWidth = 1;
-	}
-
-	this.currGlyph.contours.forEach(function(contour) {
-		contour.fullySelected = this._showNodes && !contour.skeleton;
-	}, this);
-
-	this.currGlyph.components.forEach(function(component) {
-		component.visible = true;
-		component.contours.forEach(function(contour) {
-			contour.fullySelected = this._showNodes && !contour.skeleton;
-		}, this);
-	}, this);
-
-	this.view._project._needsUpdate = true;
-	this.view.update();
-};
+PrototypoCanvas.prototype.displayGlyph = glyph.displayGlyph;
 
 PrototypoCanvas.prototype.displayChar = function( code ) {
 	this.latestChar = code;
 	this.displayGlyph( typeof code === 'string' ?
 		this.font.charMap[ code.charCodeAt(0) ] : code
 	);
+};
+
+// overwrite the appearance of #selected items in paper.js
+paper.PaperScope.prototype.Path.prototype._drawSelected = glyph._drawSelected;
+_.assign( paper.settings, {
+	handleSize: 6,
+	handleColor: '#FF725E',
+	nodeColor: '#00C4D6',
+	drawCoords: false,
+	handleFont: '12px monospace'
+});
+
+// The worker queue is not your ordinary queue: the priority of the job is
+// defined arbitrarily, and any message previously present
+// at this position will be overwritten. The priorities associated to the
+// message type are hardcoded below (in ascending priority order).
+PrototypoCanvas.priorities = [ 'update', 'subset', 'svgFont', 'otfFont' ];
+PrototypoCanvas.prototype.enqueue = function( message ) {
+	this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ] = message;
+	this.dequeue();
+};
+
+PrototypoCanvas.prototype.dequeue = function() {
+	if ( this.currentJob || !this.worker ) {
+		return;
+	}
+
+	// send the highest priority mesage in the queue (0 is lowest)
+	for ( var i = this._queue.length; i--; ) {
+		if ( this._queue[i] ) {
+			this.currentJob = this._queue[i];
+			this.worker.postMessage( this.currentJob );
+			this._queue[i] = null;
+			break;
+		}
+	}
+};
+
+PrototypoCanvas.prototype.emptyQueue = function() {
+	this._queue = [];
+	this.currentJob = false;
 };
 
 PrototypoCanvas.prototype.update = function( values ) {
@@ -269,90 +206,63 @@ PrototypoCanvas.prototype.update = function( values ) {
 	// so we need all three!
 	this.latestValues = this.latestRafValues = values;
 
-	if ( this.worker && !this.isWorkerBusy ) {
-		// block updates
-		this.isWorkerBusy = true;
-
-		this.worker.postMessage({
-			type: 'update',
-			data: values
-		});
-
-	// if the worker is already busy, store the latest values so that we can
-	// eventually update the font with the latest values
-	} else {
-		this.latestWorkerValues = values;
-	}
+	this.enqueue({
+		type: 'update',
+		data: values
+	});
 };
 
-PrototypoCanvas.prototype.download = function( name, cb ) {
-	if ( !this.worker || !this.latestValues || this.fontCb ) {
+PrototypoCanvas.prototype.download = function( cb, name ) {
+	if ( !this.worker || !this.latestValues ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
-		return;
+		return false;
 	}
 
-	this.fontCb = cb || true;
-	this.isWorkerBusy = true;
-
-	// We don't care if the worker is busy here
-	this.worker.postMessage({
-		type: 'otfFont'
+	this.enqueue({
+		type: 'otfFont',
+		data: name,
+		callback: cb
 	});
 };
 
 PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
-	if ( !this.worker || !this.latestValues || this.fontCb ) {
+	if ( !this.worker || !this.latestValues ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
-		return;
+		return false;
 	}
 
-	// We don't care if the worker is busy here
-	this.fontCb = cb || true;
-	this.isWorkerBusy = true;
-
-	// We don't care if the worker is busy here
-	this.worker.postMessage({
-		type: 'svgFont'
+	this.enqueue({
+		type: 'svgFont',
+		callback: cb
 	});
 };
 
-PrototypoCanvas.prototype.changeFont = function( opts ) {
-	return changeFont( opts );
-}
-
-PrototypoCanvas.prototype.loadFont = function( opts ) {
-	this.worker.onmessage = fontBufferHandler.bind(this);
-	if ( this.fontRegister[opts.fontObj.fontinfo.familyName] ) {
-		this.font = this.fontRegister[opts.fontObj.fontinfo.familyName];
-	} else {
-		this.font = prototypo.parametricFont( opts.fontObj );
-		this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
-	}
-
-	// Ok I think I know how it works now.
-	// getGlyphSubset return a whole subset when you call update in the worker (don't know why)
-	// So if the font is not complete when you call update the font is incomplete and
-	// cannot be loaded with window.FontFace.
-	// When you load an incomplete font you have to call the subset getter to load the font
-	// properly
-	// displayChar is called to update the whole glyph in canvas.
-	this.update( this.latestValues, this.subset );
-	this.subset = this.saveSubset;
-	this.displayChar( this.latestChar );
-}
-
-PrototypoCanvas.load = load;
-
-// overwrite the appearance of #selected items in paper.js
-paper.PaperScope.prototype.Path.prototype._drawSelected = _drawSelected;
-_.assign( paper.settings, {
-	handleSize: 6,
-	handleColor: '#FF725E',
-	nodeColor: '#00C4D6',
-	drawCoords: false,
-	handleFont: '12px monospace'
-});
+// PrototypoCanvas.prototype.changeFont = function( opts ) {
+// 	return changeFont( opts );
+// };
+//
+// PrototypoCanvas.prototype.loadFont = function( opts ) {
+// 	this.worker.onmessage = fontBufferHandler.bind(this);
+// 	if ( this.fontRegister[opts.fontObj.fontinfo.familyName] ) {
+// 		this.font = this.fontRegister[opts.fontObj.fontinfo.familyName];
+// 	} else {
+// 		this.font = prototypo.parametricFont( opts.fontObj );
+// 		this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
+// 	}
+//
+// 	// Ok I think I know how it works now.
+// // getGlyphSubset returns a whole subset when you call update in the worker
+// 	// (don't know why though).
+// 	// So if the font is not complete when you call update the font is
+// 	// incomplete and cannot be loaded with window.FontFace.
+// 	// When you load an incomplete font you have to call the subset getter to
+// 	// load the font properly.
+// 	// displayChar is called to update the whole glyph in canvas.
+// 	this.update( this.latestValues, this.subset );
+// 	this.subset = this.saveSubset;
+// 	this.displayChar( this.latestChar );
+// };
 
 module.exports = PrototypoCanvas;
