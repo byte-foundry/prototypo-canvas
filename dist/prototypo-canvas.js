@@ -193,7 +193,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 				data: set
 			});
 
-			this.font.subset = this.currSubset = set;
+			this.font.subset = set;
 		}
 	}
 });
@@ -287,32 +287,6 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		callback: cb
 	});
 };
-
-// PrototypoCanvas.prototype.changeFont = function( opts ) {
-// 	return changeFont( opts );
-// };
-//
-// PrototypoCanvas.prototype.loadFont = function( opts ) {
-// 	this.worker.onmessage = fontBufferHandler.bind(this);
-// 	if ( this.fontRegister[opts.fontObj.fontinfo.familyName] ) {
-// 		this.font = this.fontRegister[opts.fontObj.fontinfo.familyName];
-// 	} else {
-// 		this.font = prototypo.parametricFont( opts.fontObj );
-// 		this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
-// 	}
-//
-// 	// Ok I think I know how it works now.
-// // getGlyphSubset returns a whole subset when you call update in the worker
-// 	// (don't know why though).
-// 	// So if the font is not complete when you call update the font is
-// 	// incomplete and cannot be loaded with window.FontFace.
-// 	// When you load an incomplete font you have to call the subset getter to
-// 	// load the font properly.
-// 	// displayChar is called to update the whole glyph in canvas.
-// 	this.update( this.latestValues, this.subset );
-// 	this.subset = this.saveSubset;
-// 	this.displayChar( this.latestChar );
-// };
 
 module.exports = PrototypoCanvas;
 
@@ -545,60 +519,6 @@ module.exports = function init( opts ) {
 	});
 };
 
-// function changeFont( opts, values ) {
-//
-// 	return Promise.all([
-// 		!opts.fontSource && opts.fontUrl
-// 	].map(function( url ) {
-// 		// only fetch the resources if we have just the url, not the source
-// 		return url && fetch( url );
-//
-// 	})).then(function( results ) {
-// 		// parse fetched resources
-// 		return Promise.all([
-// 			results[0] && results[0].text()
-// 		]);
-//
-// 	}).then(function( results ) {
-// 		if ( results[0] ) {
-// 			opts.fontSource = results[0];
-// 		}
-//
-// 		opts.fontObj = JSON.parse( opts.fontSource );
-// 		return new Promise(function( resolve ) {
-//
-// 			worker.postMessage({
-// 				type: 'font',
-// 				data: opts.fontSource
-// 			});
-//
-// 			worker.onmessage = function(e) {
-// 				// load the font
-// 				if ( e.data.type === 'solvingOrders' ) {
-// 					opts.worker = worker;
-// 					// merge solvingOrders with the source
-// 					Object.keys( e.data.data ).forEach(function(key) {
-// 						if ( e.data.data[key] ) {
-// 							opts.fontObj.glyphs[key].solvingOrder =
-// 								e.data.data[key];
-// 						}
-// 					});
-//
-// 					// We're done with the asynchronous stuff!
-// 					resolve();
-// 				}
-// 			};
-// 		});
-// 	}).then(function() {
-// 		instance.loadFont( opts );
-// 	});
-// }
-
-// module.exports = {
-// 	init: init,
-// 	changeFont: changeFont
-// };
-
 },{"./../worker":8}],5:[function(require,module,exports){
 // switch the current glyph with one that has the same name
 // in the next font, or one with the same unicode, or .undef
@@ -770,7 +690,7 @@ function fontBufferHandler(e) {
 	this.font.addToFonts( this.latestBuffer );
 }
 
-function otfFontHandler(e) {
+function otfFontHandler(e) {console.log('here');
 	this.latestBuffer = e.data;
 	this.font.download( this.latestBuffer );
 }
@@ -857,7 +777,7 @@ function worker() {
 		// // invalidate the previous subset
 		// currSubset = [];
 
-		font.update( params );
+		font.update( currValues );
 		// the following is required so that the globalMatrix of glyphs takes
 		// the font matrix into account. I assume this is done in the main
 		// thread when calling view.update();
@@ -887,6 +807,15 @@ function worker() {
 		// Recreate the correct font.ot.glyphs array, without touching the ot
 		// commands
 		font.updateOTCommands([]);
+		var buffer = font.ot.toBuffer();
+		self.postMessage( buffer, [ buffer ] );
+	};
+
+	handlers.otfFont = function() {
+		// force the update of the whole font, ignoring the current subset
+		font.update( currValues, false );
+
+		font.updateOTCommands( false );
 		var buffer = font.ot.toBuffer();
 		self.postMessage( buffer, [ buffer ] );
 	};

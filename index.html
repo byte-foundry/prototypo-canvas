@@ -28,6 +28,12 @@
 				vertical-align: middle;
 			}
 
+			#export {
+				border: 1px solid black;
+				padding: 2px 4px;
+				background:  #EEE;
+			}
+
 			#sample {
 				display: block;
 				width: 1024px;
@@ -47,7 +53,7 @@
 			<input type="text" id="glyphList" maxlength="1" size="1" value="a" />
 			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
 			Slant: <input type="range" id="slant" min="-45" max="45" step="1" />
-			<button id="export">⭳ export</button>
+			<a download="font.otf" id="export">⭳ export</a>
 			<input type="checkbox" id="outline" /><label for="outline">Outline</label>
 			<input type="checkbox" id="nodes" /><label for="nodes">Show nodes</label>
 			<input type="checkbox" id="coords" /><label for="coords">Show coords</label>

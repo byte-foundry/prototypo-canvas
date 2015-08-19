@@ -10,7 +10,7 @@ function fontBufferHandler(e) {
 	this.font.addToFonts( this.latestBuffer );
 }
 
-function otfFontHandler(e) {
+function otfFontHandler(e) {console.log('here');
 	this.latestBuffer = e.data;
 	this.font.download( this.latestBuffer );
 }

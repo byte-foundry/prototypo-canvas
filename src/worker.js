@@ -68,7 +68,7 @@ function worker() {
 		// // invalidate the previous subset
 		// currSubset = [];
 
-		font.update( params );
+		font.update( currValues );
 		// the following is required so that the globalMatrix of glyphs takes
 		// the font matrix into account. I assume this is done in the main
 		// thread when calling view.update();
@@ -98,6 +98,15 @@ function worker() {
 		// Recreate the correct font.ot.glyphs array, without touching the ot
 		// commands
 		font.updateOTCommands([]);
+		var buffer = font.ot.toBuffer();
+		self.postMessage( buffer, [ buffer ] );
+	};
+
+	handlers.otfFont = function() {
+		// force the update of the whole font, ignoring the current subset
+		font.update( currValues, false );
+
+		font.updateOTCommands( false );
 		var buffer = font.ot.toBuffer();
 		self.postMessage( buffer, [ buffer ] );
 	};

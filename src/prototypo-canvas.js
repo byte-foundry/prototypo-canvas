@@ -144,7 +144,7 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 				data: set
 			});
 
-			this.font.subset = this.currSubset = set;
+			this.font.subset = set;
 		}
 	}
 });
@@ -238,31 +238,5 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		callback: cb
 	});
 };
-
-// PrototypoCanvas.prototype.changeFont = function( opts ) {
-// 	return changeFont( opts );
-// };
-//
-// PrototypoCanvas.prototype.loadFont = function( opts ) {
-// 	this.worker.onmessage = fontBufferHandler.bind(this);
-// 	if ( this.fontRegister[opts.fontObj.fontinfo.familyName] ) {
-// 		this.font = this.fontRegister[opts.fontObj.fontinfo.familyName];
-// 	} else {
-// 		this.font = prototypo.parametricFont( opts.fontObj );
-// 		this.fontRegister[opts.fontObj.fontinfo.familyName] = this.font;
-// 	}
-//
-// 	// Ok I think I know how it works now.
-// // getGlyphSubset returns a whole subset when you call update in the worker
-// 	// (don't know why though).
-// 	// So if the font is not complete when you call update the font is
-// 	// incomplete and cannot be loaded with window.FontFace.
-// 	// When you load an incomplete font you have to call the subset getter to
-// 	// load the font properly.
-// 	// displayChar is called to update the whole glyph in canvas.
-// 	this.update( this.latestValues, this.subset );
-// 	this.subset = this.saveSubset;
-// 	this.displayChar( this.latestChar );
-// };
 
 module.exports = PrototypoCanvas;
