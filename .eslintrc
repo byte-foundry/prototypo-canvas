@@ -22,7 +22,8 @@
 		"objectLiteralShorthandProperties": true
 	},
 	"globals": {
-		"prototypo": true
+		"prototypo": true,
+		"FileReaderSync": true
 	},
 	"rules": {
 		"quotes": "single",

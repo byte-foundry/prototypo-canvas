@@ -47,7 +47,9 @@ window.PrototypoCanvas.init({
 	// comment the following line to test "production mode", where worker is
 	// built from source instead of file
 	workerUrl: 'src/worker.js',
-	prototypoUrl: document.querySelector('script[src*=prototypo\\.]').src
+	workerDeps: document.querySelector('script[src*=prototypo\\.]').src,
+	// uncomment and customize only when using a local version of Glyphr
+	glyphrUrl: 'http://localhost:8080/dev/Glyphr_Studio.html'
 }).then(function( instance ) {
 	return instance.loadFont(
 		'john-fell', 'node_modules/john-fell.ptf/dist/font.json');
@@ -88,6 +90,9 @@ window.PrototypoCanvas.init({
 	});
 	$('#export').on('click', function() {
 		instance.download();
+	});
+	$('#glyphr').on('click', function() {
+		instance.openInGlyphr();
 	});
 	$('#sample').on('input', function( event ) {
 		instance.subset = event.target.value;

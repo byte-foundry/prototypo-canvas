@@ -28,12 +28,6 @@
 				vertical-align: middle;
 			}
 
-			#export {
-				border: 1px solid black;
-				padding: 2px 4px;
-				background:  #EEE;
-			}
-
 			#sample {
 				display: block;
 				width: 1024px;
@@ -53,10 +47,11 @@
 			<input type="text" id="glyphList" maxlength="1" size="1" value="a" />
 			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
 			Slant: <input type="range" id="slant" min="-45" max="45" step="1" />
-			<a download="font.otf" id="export">⭳ export</a>
+			<button id="export">⭳ export</button>
+			<button id="glyphr">⤇ Glyphr</button>
 			<input type="checkbox" id="outline" /><label for="outline">Outline</label>
-			<input type="checkbox" id="nodes" /><label for="nodes">Show nodes</label>
-			<input type="checkbox" id="coords" /><label for="coords">Show coords</label>
+			<input type="checkbox" id="nodes" /><label for="nodes">Nodes</label>
+			<input type="checkbox" id="coords" /><label for="coords">Coords</label>
 			<button id="load-venus">load venus</button>
 			<button id="load-john">load john</button>
 
@@ -70,5 +65,8 @@
 		<script src="node_modules/prototypo.js/dist/prototypo.js"></script>
 		<script src="dist/prototypo-canvas.js"></script>
 		<script src="script.js"></script>
+		<script type='text/javascript' id="__bs_script__">//<![CDATA[
+			document.write("<script async src='http://HOST:3000/browser-sync/browser-sync-client.2.6.4.js'><\/script>".replace("HOST", location.hostname));
+		//]]></script>
 	</body>
 </html>

@@ -3,7 +3,6 @@ var prototypo = require('prototypo.js'),
 	// Grid = require('./grid'),
 	glyph = require('./utils/glyph'),
 	mouseHandlers = require('./utils/mouseHandlers'),
-	workerHandlers = require('./utils/workerHandlers'),
 	init = require('./utils/init'),
 	loadFont = require('./utils/loadFont');
 
@@ -20,7 +19,8 @@ function PrototypoCanvas( opts ) {
 		fill: true,
 		shoNodes: false,
 		zoomFactor: 0.05,
-		jQueryListeners: true
+		jQueryListeners: true,
+		glyphrUrl: 'http://www.glyphrstudio.com/online/'
 	}, opts);
 
 	this.canvas = opts.canvas;
@@ -46,12 +46,12 @@ function PrototypoCanvas( opts ) {
 				return;
 			}
 
-			// execute the appropriate handler, according to the type of the
-			// current job.
-			var result = this[ this.currentJob.type + 'Handler' ](e);
-
 			if ( this.currentJob.callback ) {
-				this.currentJob.callback( result );
+				this.currentJob.callback( e.data );
+
+			// default callback for buffers: use it as a font
+			} else if ( e.data instanceof ArrayBuffer ) {
+				this.font.addToFonts( e.data );
 			}
 
 			this.currentJob = false;
@@ -66,13 +66,13 @@ function PrototypoCanvas( opts ) {
 			type = ( 'PointerEventsPolyfill' in window ) ||
 				( 'PointerEvent' in window ) ? 'pointer' : 'mouse';
 
-		$(opts.canvas).on( 'wheel', this.wheelHandler.bind(this) );
+		$(opts.canvas).on( 'wheel', this.onWheel.bind(this) );
 
-		$(opts.canvas).on( type + 'move', this.moveHandler.bind(this) );
+		$(opts.canvas).on( type + 'move', this.onMove.bind(this) );
 
-		$(opts.canvas).on( type + 'down', this.downHandler.bind(this) );
+		$(opts.canvas).on( type + 'down', this.onDown.bind(this) );
 
-		$(document).on( type + 'up', this.upHandler.bind(this) );
+		$(document).on( type + 'up', this.onUp.bind(this) );
 	}
 
 	// setup raf loop
@@ -95,7 +95,7 @@ function PrototypoCanvas( opts ) {
 
 PrototypoCanvas.init = init;
 PrototypoCanvas.prototype.loadFont = loadFont;
-_.assign( PrototypoCanvas.prototype, mouseHandlers, workerHandlers );
+_.assign( PrototypoCanvas.prototype, mouseHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
 	zoom: {
@@ -187,7 +187,14 @@ PrototypoCanvas.prototype.dequeue = function() {
 	for ( var i = this._queue.length; i--; ) {
 		if ( this._queue[i] ) {
 			this.currentJob = this._queue[i];
+
+			// the callback function shouldn't be sent
+			var cb = this.currentJob.callback;
+			delete this.currentJob.callback;
+
 			this.worker.postMessage( this.currentJob );
+
+			this.currentJob.callback = cb;
 			this._queue[i] = null;
 			break;
 		}
@@ -222,7 +229,12 @@ PrototypoCanvas.prototype.download = function( cb, name ) {
 	this.enqueue({
 		type: 'otfFont',
 		data: name,
-		callback: cb
+		callback: function( data ) {
+			this.font.download( data );
+			if ( cb ) {
+				cb();
+			}
+		}.bind(this)
 	});
 };
 
@@ -234,8 +246,24 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 	}
 
 	this.enqueue({
-		type: 'svgFont',
-		callback: cb
+		// otf/svg switch
+		type: 'otfFont',
+		// type: 'svgFont',
+		callback: function( data ) {console.log('here');
+			window.open( this.opts.glyphrUrl );
+			window.addEventListener('message', function initGlyphr(e) {
+				window.removeEventListener('message', initGlyphr);
+				if ( e.data !== 'ready' ) {
+					return;
+				}
+				// otf/svg switch
+				e.source.postMessage( data, e.origin, [ data ] );
+				// e.source.postMessage( data, e.origin );
+				if ( cb ) {
+					cb();
+				}
+			});
+		}.bind(this)
 	});
 };
 

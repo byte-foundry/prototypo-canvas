@@ -1,6 +1,6 @@
-var path = require('path'),
-	gulp = require('gulp'),
-	shelter = require('gulp-shelter');
+var path	= require('path');
+var gulp	= require('gulp');
+var shelter	= require('gulp-shelter');
 
 shelter = shelter( gulp );
 

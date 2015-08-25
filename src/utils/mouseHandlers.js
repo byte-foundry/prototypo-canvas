@@ -62,10 +62,10 @@ function zoomOut() {
 }
 
 module.exports = {
-	wheelHandler: wheelHandler,
-	moveHandler: moveHandler,
-	downHandler: downHandler,
-	upHandler: upHandler,
+	onWheel: wheelHandler,
+	onMove: moveHandler,
+	onDown: downHandler,
+	onUp: upHandler,
 	zoomIn: zoomIn,
 	zoomOut: zoomOut
 };

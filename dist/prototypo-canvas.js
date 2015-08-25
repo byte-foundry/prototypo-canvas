@@ -52,7 +52,6 @@ var prototypo = (typeof window !== "undefined" ? window.prototypo : typeof globa
 	// Grid = require('./grid'),
 	glyph = require('./utils/glyph'),
 	mouseHandlers = require('./utils/mouseHandlers'),
-	workerHandlers = require('./utils/workerHandlers'),
 	init = require('./utils/init'),
 	loadFont = require('./utils/loadFont');
 
@@ -69,7 +68,8 @@ function PrototypoCanvas( opts ) {
 		fill: true,
 		shoNodes: false,
 		zoomFactor: 0.05,
-		jQueryListeners: true
+		jQueryListeners: true,
+		glyphrUrl: 'http://www.glyphrstudio.com/online/'
 	}, opts);
 
 	this.canvas = opts.canvas;
@@ -95,12 +95,12 @@ function PrototypoCanvas( opts ) {
 				return;
 			}
 
-			// execute the appropriate handler, according to the type of the
-			// current job.
-			var result = this[ this.currentJob.type + 'Handler' ](e);
-
 			if ( this.currentJob.callback ) {
-				this.currentJob.callback( result );
+				this.currentJob.callback( e.data );
+
+			// default callback for buffers: use it as a font
+			} else if ( e.data instanceof ArrayBuffer ) {
+				this.font.addToFonts( e.data );
 			}
 
 			this.currentJob = false;
@@ -115,13 +115,13 @@ function PrototypoCanvas( opts ) {
 			type = ( 'PointerEventsPolyfill' in window ) ||
 				( 'PointerEvent' in window ) ? 'pointer' : 'mouse';
 
-		$(opts.canvas).on( 'wheel', this.wheelHandler.bind(this) );
+		$(opts.canvas).on( 'wheel', this.onWheel.bind(this) );
 
-		$(opts.canvas).on( type + 'move', this.moveHandler.bind(this) );
+		$(opts.canvas).on( type + 'move', this.onMove.bind(this) );
 
-		$(opts.canvas).on( type + 'down', this.downHandler.bind(this) );
+		$(opts.canvas).on( type + 'down', this.onDown.bind(this) );
 
-		$(document).on( type + 'up', this.upHandler.bind(this) );
+		$(document).on( type + 'up', this.onUp.bind(this) );
 	}
 
 	// setup raf loop
@@ -144,7 +144,7 @@ function PrototypoCanvas( opts ) {
 
 PrototypoCanvas.init = init;
 PrototypoCanvas.prototype.loadFont = loadFont;
-_.assign( PrototypoCanvas.prototype, mouseHandlers, workerHandlers );
+_.assign( PrototypoCanvas.prototype, mouseHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
 	zoom: {
@@ -236,7 +236,14 @@ PrototypoCanvas.prototype.dequeue = function() {
 	for ( var i = this._queue.length; i--; ) {
 		if ( this._queue[i] ) {
 			this.currentJob = this._queue[i];
+
+			// the callback function shouldn't be sent
+			var cb = this.currentJob.callback;
+			delete this.currentJob.callback;
+
 			this.worker.postMessage( this.currentJob );
+
+			this.currentJob.callback = cb;
 			this._queue[i] = null;
 			break;
 		}
@@ -271,7 +278,12 @@ PrototypoCanvas.prototype.download = function( cb, name ) {
 	this.enqueue({
 		type: 'otfFont',
 		data: name,
-		callback: cb
+		callback: function( data ) {
+			this.font.download( data );
+			if ( cb ) {
+				cb();
+			}
+		}.bind(this)
 	});
 };
 
@@ -283,14 +295,30 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 	}
 
 	this.enqueue({
-		type: 'svgFont',
-		callback: cb
+		// otf/svg switch
+		type: 'otfFont',
+		// type: 'svgFont',
+		callback: function( data ) {console.log('here');
+			window.open( this.opts.glyphrUrl );
+			window.addEventListener('message', function initGlyphr(e) {
+				window.removeEventListener('message', initGlyphr);
+				if ( e.data !== 'ready' ) {
+					return;
+				}
+				// otf/svg switch
+				e.source.postMessage( data, e.origin, [ data ] );
+				// e.source.postMessage( data, e.origin );
+				if ( cb ) {
+					cb();
+				}
+			});
+		}.bind(this)
 	});
 };
 
 module.exports = PrototypoCanvas;
 
-},{"./utils/glyph":3,"./utils/init":4,"./utils/loadFont":5,"./utils/mouseHandlers":6,"./utils/workerHandlers":7,"es6-object-assign":1}],3:[function(require,module,exports){
+},{"./utils/glyph":3,"./utils/init":4,"./utils/loadFont":5,"./utils/mouseHandlers":6,"es6-object-assign":1}],3:[function(require,module,exports){
 function displayGlyph( _glyph ) {
 	var glyph =
 			// no glyph means we're switching fill mode for the current glyph
@@ -465,61 +493,74 @@ var shell = require('./../worker');
 var URL = typeof window !== 'undefined' && ( window.URL || window.webkitURL );
 
 module.exports = function init( opts ) {
-	var PrototypoCanvas = this;
+	var constructor = this;
 
-	return ( opts.prototypoSource ?
-		Promise.resolve( opts.prototypoSource ) :
-		// fetch the resource from URL
-		fetch( opts.prototypoUrl )
+	// the worker can be loaded from a file by specifying its url (dev
+	// environment), or by building it as a blob, from a require'd file.
+	if ( !opts.workerUrl ) {
+		opts.workerUrl = URL.createObjectURL(
+			new Blob([
+				// IIFE power
+				'(' + shell.toString() + ')();' +
+				// For some reason [object Object] is appended to the source
+				// by Firefox when the worker is created, which causes the
+				// script to throw without the following comment.
+				'//',
+				{ type: 'text/javascript' }
+			])
+		);
+	}
 
-	).then(function( result ) {
-		return typeof result === 'string' || result.text();
+	// create the worker
+	return new Promise(function( resolve ) {
+		var worker = opts.worker = new Worker( opts.workerUrl );
 
-	}).then(function( result ) {
-		if ( result !== true ) {
-			opts.prototypoSource = result;
-		}
+		worker.postMessage( Array.isArray( opts.workerDeps ) ?
+			opts.workerDeps :
+			[ opts.workerDeps ]
+		);
 
-		// the worker can be loaded from a file by specifying its url (dev
-		// environment), or by building it as a blob, from a require'd file.
-		if ( opts.workerUrl ) {
-			// The search fragment of workerUrl must include prototypo.js URL
-			opts.workerUrl +=
-				'?bundleurl=' + encodeURIComponent( opts.prototypoUrl );
-
-		} else {
-			opts.workerUrl = URL.createObjectURL(
-				new Blob([
-					opts.prototypoSource + ';\n\n' +
-					// IIFE power
-					'(' + shell.toString() + ')();' +
-					// For some reason [object Object] is appended to the source
-					// by Firefox when the worker is created, which causes the
-					// script to throw without the following comment.
-					'//',
-					{ type: 'text/javascript' }
-				])
-			);
-		}
-
-	}).then(function() {
-		// create the worker
-		return new Promise(function( resolve ) {
-			var worker = opts.worker = new Worker( opts.workerUrl );
-
-			worker.onmessage = function(e) {
-				if ( e.data.type === 'ready' ) {
-					resolve();
-				}
-			};
+		worker.addEventListener('message', function initWorker() {
+			worker.removeEventListener('message', initWorker);
+			resolve();
 		});
 
 	}).then(function() {
-		return new PrototypoCanvas( opts );
+		return new constructor( opts );
 	});
+
+	// return ( opts.prototypoSource ?
+	// 	Promise.resolve( opts.prototypoSource ) :
+	// 	// fetch the resource from URL
+	// 	fetch( opts.prototypoUrl )
+	//
+	// ).then(function( result ) {
+	// 	return typeof result === 'string' || result.text();
+	//
+	// }).then(function( result ) {
+	// 	if ( result !== true ) {
+	// 		opts.prototypoSource = result;
+	// 	}
+	//
+	// 	// the worker can be loaded from a file by specifying its url (dev
+	// 	// environment), or by building it as a blob, from a require'd file.
+	// 	if ( opts.workerUrl ) {
+	// 		// The search fragment of workerUrl must include prototypo.js URL
+	// 		opts.workerUrl +=
+	// 			'?bundleurl=' + encodeURIComponent( opts.prototypoUrl );
+	//
+	// 	} else {
+	//
+	// 		// opts.workerUrl +=
+	// 		// 	'?bundleurl=' + encodeURIComponent( opts.prototypoUrl );
+	// 		// console.log(opts.workerUrl);
+	// 	}
+
+	// }).then(function() {
+
 };
 
-},{"./../worker":8}],5:[function(require,module,exports){
+},{"./../worker":7}],5:[function(require,module,exports){
 // switch the current glyph with one that has the same name
 // in the next font, or one with the same unicode, or .undef
 function translateGlyph( self ) {
@@ -669,163 +710,156 @@ function zoomOut() {
 }
 
 module.exports = {
-	wheelHandler: wheelHandler,
-	moveHandler: moveHandler,
-	downHandler: downHandler,
-	upHandler: upHandler,
+	onWheel: wheelHandler,
+	onMove: moveHandler,
+	onDown: downHandler,
+	onUp: upHandler,
 	zoomIn: zoomIn,
 	zoomOut: zoomOut
 };
 
 },{}],7:[function(require,module,exports){
-// var dotsvgTemplate = require('./dotsvg.tpl');
+function prepareWorker() {
+	function runWorker() {
+		var font,
+			handlers = {},
+			fontsMap = {},
+			currValues,
+			currSubset = [],
+			//jscs:disable
+			// template = function svg(_font, glyphs) {
+			// 	return '<?xml version="1.0" standalone="no"?>\n<!DOCTYPE svg PUBLIC\n\t"-//W3C//DTD SVG 1.1//EN"\n\t"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n<svg xmlns="http://www.w3.org/2000/svg">\n<metadata></metadata>\n<defs>\n<font id="' + _font.ot.familyName.replace(' ', '') + '" horiz-adv-x="1191">\n<font-face\n\tfont-family="' + _font.ot.familyName + '"\n\tfont-weight="500"\n\tfont-stretch="normal"\n\tunits-per-em="1024"\n\tascent="' + _font.fontinfo.ascender + '"\n\tdescent="' + _font.fontinfo.descender + '" />\n<missing-glyph horiz-adv-x="500" />\n<glyph name=".notdef" unicode="&#xd;" horiz-adv-x="681" />\n' + glyphs.map(function (glyph) {
+			// 		// exclude .notdef, which is included above with valid unicode
+			// 		return glyph.ot.unicode === 0 ? '' : '<glyph\n\t\tname="' + glyph.name + '"\n\t\tunicode="&#' + glyph.ot.unicode + ';"\n\t\thoriz-adv-x="' + glyph.ot.advanceWidth + '"\n\t\td="' + glyph.svgData + '"/>';
+			// 	}).join('\n') + '\n</font>\n</defs>\n</svg>';
+			// },
+			//jscs:enable
+			translateSubset = function() {
+				if ( !currSubset.length ) {
+					return;
+				}
 
-// handles buffers coming from the worker
-function fontBufferHandler(e) {
-	if ( !(e.data instanceof ArrayBuffer) ) {
-		return;
-	}
+				font.subset = currSubset.map(function( glyph ) {
+					return font.charMap[ glyph.ot.unicode ];
+				}).filter(function( glyph ) { return glyph; });
 
-	this.latestBuffer = e.data;
-	this.font.addToFonts( this.latestBuffer );
-}
+				currSubset = font.subset;
+			};
 
-function otfFontHandler(e) {console.log('here');
-	this.latestBuffer = e.data;
-	this.font.download( this.latestBuffer );
-}
+		prototypo.paper.setup({
+			width: 1024,
+			height: 1024
+		});
 
-function svgFontHandler() {
+		// mini router
+		self.onmessage = function(e) {
+			if ( e.data.type && e.data.type in handlers ) {
+				handlers[ e.data.type ]( e.data.data, e.data.name );
+			}
+		};
 
-}
-
-module.exports = {
-	updateHandler: fontBufferHandler,
-	subsetHandler: fontBufferHandler,
-	otfFontHandler: otfFontHandler,
-	svgFontHandler: svgFontHandler
-};
-
-},{}],8:[function(require,module,exports){
-if ( typeof global === 'undefined' && 'importScripts' in self ) {
-	// When the worker is loaded by URL, the search fragment must include
-	// the URL of prototypo.js
-	self.importScripts( decodeURIComponent(
-		self.location.search.replace(/(\?|&)bundleurl=(.*?)(&|$)/, '$2')
-	) );
-}
-
-function worker() {
-	var font,
-		handlers = {},
-		fontsMap = {},
-		currValues,
-		currSubset = [],
-		translateSubset = function() {
-			if ( !currSubset.length ) {
+		handlers.font = function( fontSource, name ) {
+			// TODO: this should be done using a memoizing table of limited size
+			if ( name in fontsMap ) {
+				font = fontsMap[name];
+				translateSubset();
 				return;
 			}
 
-			font.subset = currSubset.map(function( glyph ) {
-				return font.charMap[ glyph.ot.unicode ];
-			}).filter(function( glyph ) { return glyph; });
+			var fontObj = JSON.parse( fontSource );
 
-			currSubset = font.subset;
+			font = prototypo.parametricFont(fontObj);
+			fontsMap[name] = font;
+
+			translateSubset();
+
+			var solvingOrders = {};
+			Object.keys( font.glyphMap ).forEach(function(key) {
+				solvingOrders[key] = font.glyphMap[key].solvingOrder;
+			});
+
+			self.postMessage({
+				type: 'solvingOrders',
+				data: solvingOrders
+			});
 		};
 
-	self.postMessage({ type: 'ready' });
+		handlers.update = function( params ) {
+			currValues = params;
+			// Why did I do that?
+			// // invalidate the previous subset
+			// currSubset = [];
 
-	prototypo.paper.setup({
-		width: 1024,
-		height: 1024
-	});
+			font.update( currValues );
+			// the following is required so that the globalMatrix of glyphs
+			// takes the font matrix into account. I assume this is done in the
+			// main thread when calling view.update();
+			font._project._updateVersion++;
+			font.updateOTCommands();
+			var buffer = font.ot.toBuffer();
+			self.postMessage( buffer, [ buffer ] );
+		};
 
-	// mini router
-	self.onmessage = function(e) {
-		handlers[ e.data.type ]( e.data.data, e.data.name );
-	};
+		handlers.subset = function( set ) {
+			var prevGlyphs = currSubset.map(function( glyph ) {
+				return glyph.name;
+			});
+			font.subset = set;
+			currSubset = font.subset;
 
-	handlers.font = function( fontSource, name ) {
-		// TODO: this should be done using a memoizing table of limited size
-		if ( name in fontsMap ) {
-			font = fontsMap[name];
-			translateSubset();
-			return;
-		}
+			// search for glyphs *added* to the subset
+			currSubset.filter(function( glyph ) {
+				return prevGlyphs.indexOf( glyph.name ) === -1;
 
-		var fontObj = JSON.parse( fontSource );
+			// update those glyphs
+			}).forEach(function( glyph ) {
+				glyph.update( currValues );
+				glyph.updateOTCommands();
+			});
 
-		font = prototypo.parametricFont(fontObj);
-		fontsMap[name] = font;
+			// Recreate the correct font.ot.glyphs array, without touching the
+			// ot commands
+			font.updateOTCommands([]);
+			var buffer = font.ot.toBuffer();
+			self.postMessage( buffer, [ buffer ] );
+		};
 
-		translateSubset();
+		handlers.otfFont = function() {
+			// force-update of the whole font, ignoring the current subset
+			var allChars = font.getGlyphSubset( false );
+			font.update( currValues, allChars );
 
-		var solvingOrders = {};
-		Object.keys( font.glyphMap ).forEach(function(key) {
-			solvingOrders[key] = font.glyphMap[key].solvingOrder;
+			font.updateOTCommands( allChars );
+			var buffer = font.ot.toBuffer();
+			self.postMessage( buffer, [ buffer ] );
+		};
+
+		// handlers.svgFont = function() {
+		// 	// force-update of the whole font, ignoring the current subset
+		// 	var allChars = font.getGlyphSubset( false );
+		// 	font.update( currValues, allChars );
+		//
+		// 	font.updateSVGData( allChars );
+		// 	self.postMessage( template( font, allChars ) );
+		// };
+	}
+
+	// This is how bundle dependencies are loaded
+	if ( typeof global === 'undefined' && 'importScripts' in self ) {
+		self.addEventListener('message', function initWorker( e ) {
+			self.removeEventListener('message', initWorker);
+			self.importScripts( e.data );
+			runWorker();
+			self.postMessage('ready');
 		});
-
-		self.postMessage({
-			type: 'solvingOrders',
-			data: solvingOrders
-		});
-	};
-
-	handlers.update = function( params ) {
-		currValues = params;
-		// Why did I do that?
-		// // invalidate the previous subset
-		// currSubset = [];
-
-		font.update( currValues );
-		// the following is required so that the globalMatrix of glyphs takes
-		// the font matrix into account. I assume this is done in the main
-		// thread when calling view.update();
-		font._project._updateVersion++;
-		font.updateOTCommands();
-		var buffer = font.ot.toBuffer();
-		self.postMessage( buffer, [ buffer ] );
-	};
-
-	handlers.subset = function( set ) {
-		var prevGlyphs = currSubset.map(function( glyph ) {
-			return glyph.name;
-		});
-		font.subset = set;
-		currSubset = font.subset;
-
-		// search for glyphs *added* to the subset
-		currSubset.filter(function( glyph ) {
-			return prevGlyphs.indexOf( glyph.name ) === -1;
-
-		// update those glyphs
-		}).forEach(function( glyph ) {
-			glyph.update( currValues );
-			glyph.updateOTCommands();
-		});
-
-		// Recreate the correct font.ot.glyphs array, without touching the ot
-		// commands
-		font.updateOTCommands([]);
-		var buffer = font.ot.toBuffer();
-		self.postMessage( buffer, [ buffer ] );
-	};
-
-	handlers.otfFont = function() {
-		// force the update of the whole font, ignoring the current subset
-		font.update( currValues, false );
-
-		font.updateOTCommands( false );
-		var buffer = font.ot.toBuffer();
-		self.postMessage( buffer, [ buffer ] );
-	};
+	}
 }
 
 // When the worker is loaded from URL, worker() needs to be called explicitely
 if ( typeof global === 'undefined' && 'importScripts' in self ) {
-	worker();
+	prepareWorker();
 } else {
-	module.exports = worker;
+	module.exports = prepareWorker;
 }
 
 },{}]},{},[2])(2)

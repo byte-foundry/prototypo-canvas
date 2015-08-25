@@ -22,7 +22,7 @@
       [
         "babelify",
         {
-          "only": "src/dotsvg.tpl.js"
+          "only": "src/utils/dotsvg.tpl.js"
         }
       ]
     ]
@@ -55,6 +55,7 @@
     "browserify": "^9.0.3",
     "browserify-shim": "^3.8.7",
     "chai": "^2.1.2",
+    "del": "^1.2.1",
     "deptree": "^0.1.0",
     "envify": "^3.4.0",
     "eslint": "^0.17.1",
@@ -62,14 +63,22 @@
     "exorcist": "^0.1.6",
     "ghooks": "^0.3.0",
     "gulp": "^3.8.11",
+    "gulp-concat": "^2.6.0",
+    "gulp-load-plugins": "^0.10.0",
     "gulp-shelter": "^0.9.1",
+    "gulp-sourcemaps": "^1.5.2",
+    "gulp-uglify": "^1.2.0",
+    "gulp-util": "^3.0.6",
+    "john-fell.ptf": "byte-foundry/john-fell.ptf",
     "jscs": "^1.11.3",
+    "lodash.assign": "^3.2.0",
     "mocha": "^2.2.1",
     "plumin.js": "^0.8.1",
     "test.ptf": "byte-foundry/test.ptf",
-    "venus.ptf": "byte-foundry/venus.ptf",
-    "john-fell.ptf": "byte-foundry/john-fell.ptf",
     "uglify-js": "^2.4.17",
+    "venus.ptf": "byte-foundry/venus.ptf",
+    "vinyl-buffer": "^1.0.0",
+    "vinyl-source-stream": "^1.1.0",
     "watchify": "^2.6.0"
   }
 }
