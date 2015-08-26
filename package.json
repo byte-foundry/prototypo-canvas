@@ -46,7 +46,7 @@
     "jquery.wheel.js": "0.2.0",
     "normalize.css": "^3.0.3",
     "pepjs": "^0.3.0",
-    "prototypo.js": "^0.3.1",
+    "prototypo.js": "byte-foundry/prototypo.js",
     "whatwg-fetch": "^0.9.0"
   },
   "devDependencies": {
@@ -73,7 +73,6 @@
     "jscs": "^1.11.3",
     "lodash.assign": "^3.2.0",
     "mocha": "^2.2.1",
-    "plumin.js": "^0.8.1",
     "test.ptf": "byte-foundry/test.ptf",
     "uglify-js": "^2.4.17",
     "venus.ptf": "byte-foundry/venus.ptf",
