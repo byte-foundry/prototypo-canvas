@@ -9,8 +9,6 @@
   },
   "homepage": "https://github.com/byte-foundry/prototypo-canvas",
   "scripts": {
-    "//postinstall": "build dependencies",
-    "postinstall": "cd node_modules/pepjs && npm install && grunt",
     "gulp": "gulp",
     "help": "gulp --tasks",
     "test": "gulp build",
