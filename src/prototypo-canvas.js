@@ -249,7 +249,7 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		// otf/svg switch
 		type: 'otfFont',
 		// type: 'svgFont',
-		callback: function( data ) {console.log('here');
+		callback: function( data ) {
 			window.open( this.opts.glyphrUrl );
 			window.addEventListener('message', function initGlyphr(e) {
 				window.removeEventListener('message', initGlyphr);
