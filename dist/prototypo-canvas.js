@@ -789,7 +789,9 @@ function prepareWorker() {
 
 			// Recreate the correct font.ot.glyphs array, without touching the
 			// ot commands
-			font.updateOTCommands([]);
+			font.ot.glyphs = font.getGlyphSubset().map(function( glyph ) {
+				return glyph.ot;
+			});
 			var buffer = font.ot.toBuffer();
 			self.postMessage( buffer, [ buffer ] );
 		};
