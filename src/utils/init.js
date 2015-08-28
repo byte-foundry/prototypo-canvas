@@ -23,17 +23,17 @@ module.exports = function init( opts ) {
 
 	// create the worker
 	return new Promise(function( resolve ) {
-		var worker = opts.worker = new Worker( opts.workerUrl );
+		var worker = opts.worker = new Worker( opts.workerUrl ),
+			handler = function initWorker() {
+				worker.removeEventListener('message', handler);
+				resolve();
+			};
 
+		worker.addEventListener('message', handler);
 		worker.postMessage( Array.isArray( opts.workerDeps ) ?
 			opts.workerDeps :
 			[ opts.workerDeps ]
 		);
-
-		worker.addEventListener('message', function initWorker() {
-			worker.removeEventListener('message', initWorker);
-			resolve();
-		});
 
 	}).then(function() {
 		return new constructor( opts );

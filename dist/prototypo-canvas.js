@@ -299,9 +299,8 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		type: 'otfFont',
 		// type: 'svgFont',
 		callback: function( data ) {
-			window.open( this.opts.glyphrUrl );
-			window.addEventListener('message', function initGlyphr(e) {
-				window.removeEventListener('message', initGlyphr);
+			var handler = function(e) {
+				window.removeEventListener('message', handler);
 				if ( e.data !== 'ready' ) {
 					return;
 				}
@@ -311,7 +310,10 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 				if ( cb ) {
 					cb();
 				}
-			});
+			};
+
+			window.open( this.opts.glyphrUrl );
+			window.addEventListener('message', handler);
 		}.bind(this)
 	});
 };
@@ -513,17 +515,17 @@ module.exports = function init( opts ) {
 
 	// create the worker
 	return new Promise(function( resolve ) {
-		var worker = opts.worker = new Worker( opts.workerUrl );
+		var worker = opts.worker = new Worker( opts.workerUrl ),
+			handler = function initWorker() {
+				worker.removeEventListener('message', handler);
+				resolve();
+			};
 
+		worker.addEventListener('message', handler);
 		worker.postMessage( Array.isArray( opts.workerDeps ) ?
 			opts.workerDeps :
 			[ opts.workerDeps ]
 		);
-
-		worker.addEventListener('message', function initWorker() {
-			worker.removeEventListener('message', initWorker);
-			resolve();
-		});
 
 	}).then(function() {
 		return new constructor( opts );
@@ -576,24 +578,18 @@ module.exports = function loadFont( name, fontSource ) {
 
 		return new Promise(function( resolve ) {
 			var fontObj = JSON.parse( fontSource ),
-				solvingOrdersListener = function( e ) {
-					// reuse the solvingOrders computed in the worker (this is a
-					// fairly heavy operation, better doing it only once,
-					// asynchronously)
+				handler = function( e ) {
 					if ( e.data.type !== 'solvingOrders' ) {
 						return;
 					}
+					this.worker.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
 					Object.keys( e.data.data ).forEach(function(key) {
-						if ( e.data.data[key] ) {
+						if ( fontObj.glyphs[key] ) {
 							fontObj.glyphs[key].solvingOrder = e.data.data[key];
 						}
 					});
-
-					// this listener should be used only once
-					this.worker.removeEventListener(
-						'message', solvingOrdersListener);
 
 					this.font = prototypo.parametricFont( fontObj );
 					this.fontsMap[name] = this.font;
@@ -602,7 +598,7 @@ module.exports = function loadFont( name, fontSource ) {
 					resolve( this );
 				}.bind(this);
 
-			this.worker.addEventListener('message', solvingOrdersListener);
+			this.worker.addEventListener('message', handler);
 
 			this.worker.postMessage({
 				type: 'font',
@@ -611,7 +607,6 @@ module.exports = function loadFont( name, fontSource ) {
 			});
 
 		}.bind(this));
-
 	}.bind(this));
 };
 
@@ -759,7 +754,6 @@ function prepareWorker() {
 			// Why did I do that?
 			// // invalidate the previous subset
 			// currSubset = [];
-
 			font.update( currValues );
 			// the following is required so that the globalMatrix of glyphs
 			// takes the font matrix into account. I assume this is done in the
@@ -818,12 +812,14 @@ function prepareWorker() {
 
 	// This is how bundle dependencies are loaded
 	if ( typeof global === 'undefined' && 'importScripts' in self ) {
-		self.addEventListener('message', function initWorker( e ) {
-			self.removeEventListener('message', initWorker);
-			self.importScripts( e.data );
-			runWorker();
-			self.postMessage('ready');
-		});
+		var handler = function initWorker( e ) {
+				self.removeEventListener('message', handler);
+				self.importScripts( e.data );
+				runWorker();
+				self.postMessage('ready');
+			};
+
+		self.addEventListener('message', handler);
 	}
 }
 

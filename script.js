@@ -34,7 +34,7 @@ var canvasEl = document.createElement('canvas'),
 		ascenderHeight: 750,
 		spacing: 1.1
 	},
-	alphabet = 'bcdefg';
+	alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 	// alphabet = 'A';
 
 canvasEl.width = 1024;
@@ -57,7 +57,7 @@ window.PrototypoCanvas.init({
 }).then(function( instance ) {
 	instance.update( values );
 	instance.displayChar( 'a' );
-	instance.subset = 'bcdefg';
+	instance.subset = alphabet;
 	$('#glyphList').val('a');
 	$('#sample').val( alphabet );
 	$('#outline').attr({ checked: false });

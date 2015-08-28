@@ -68,7 +68,6 @@ function prepareWorker() {
 			// Why did I do that?
 			// // invalidate the previous subset
 			// currSubset = [];
-
 			font.update( currValues );
 			// the following is required so that the globalMatrix of glyphs
 			// takes the font matrix into account. I assume this is done in the
@@ -127,12 +126,14 @@ function prepareWorker() {
 
 	// This is how bundle dependencies are loaded
 	if ( typeof global === 'undefined' && 'importScripts' in self ) {
-		self.addEventListener('message', function initWorker( e ) {
-			self.removeEventListener('message', initWorker);
-			self.importScripts( e.data );
-			runWorker();
-			self.postMessage('ready');
-		});
+		var handler = function initWorker( e ) {
+				self.removeEventListener('message', handler);
+				self.importScripts( e.data );
+				runWorker();
+				self.postMessage('ready');
+			};
+
+		self.addEventListener('message', handler);
 	}
 }
 

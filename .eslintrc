@@ -23,7 +23,8 @@
 	},
 	"globals": {
 		"prototypo": true,
-		"FileReaderSync": true
+		"FileReaderSync": true,
+		"performance": true
 	},
 	"rules": {
 		"quotes": "single",

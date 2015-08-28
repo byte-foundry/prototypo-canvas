@@ -43,24 +43,18 @@ module.exports = function loadFont( name, fontSource ) {
 
 		return new Promise(function( resolve ) {
 			var fontObj = JSON.parse( fontSource ),
-				solvingOrdersListener = function( e ) {
-					// reuse the solvingOrders computed in the worker (this is a
-					// fairly heavy operation, better doing it only once,
-					// asynchronously)
+				handler = function( e ) {
 					if ( e.data.type !== 'solvingOrders' ) {
 						return;
 					}
+					this.worker.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
 					Object.keys( e.data.data ).forEach(function(key) {
-						if ( e.data.data[key] ) {
+						if ( fontObj.glyphs[key] ) {
 							fontObj.glyphs[key].solvingOrder = e.data.data[key];
 						}
 					});
-
-					// this listener should be used only once
-					this.worker.removeEventListener(
-						'message', solvingOrdersListener);
 
 					this.font = prototypo.parametricFont( fontObj );
 					this.fontsMap[name] = this.font;
@@ -69,7 +63,7 @@ module.exports = function loadFont( name, fontSource ) {
 					resolve( this );
 				}.bind(this);
 
-			this.worker.addEventListener('message', solvingOrdersListener);
+			this.worker.addEventListener('message', handler);
 
 			this.worker.postMessage({
 				type: 'font',
@@ -78,6 +72,5 @@ module.exports = function loadFont( name, fontSource ) {
 			});
 
 		}.bind(this));
-
 	}.bind(this));
 };

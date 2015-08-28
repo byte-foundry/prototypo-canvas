@@ -250,9 +250,8 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 		type: 'otfFont',
 		// type: 'svgFont',
 		callback: function( data ) {
-			window.open( this.opts.glyphrUrl );
-			window.addEventListener('message', function initGlyphr(e) {
-				window.removeEventListener('message', initGlyphr);
+			var handler = function(e) {
+				window.removeEventListener('message', handler);
 				if ( e.data !== 'ready' ) {
 					return;
 				}
@@ -262,7 +261,10 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 				if ( cb ) {
 					cb();
 				}
-			});
+			};
+
+			window.open( this.opts.glyphrUrl );
+			window.addEventListener('message', handler);
 		}.bind(this)
 	});
 };
