@@ -579,15 +579,15 @@ module.exports = function loadFont( name, fontSource ) {
 		return new Promise(function( resolve ) {
 			var fontObj = JSON.parse( fontSource ),
 				handler = function( e ) {
-					if ( e.data.type !== 'solvingOrders' ) {
+					if ( typeof e.data !== 'object' ) {
 						return;
 					}
 					this.worker.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
-					Object.keys( e.data.data ).forEach(function(key) {
+					Object.keys( e.data ).forEach(function(key) {
 						if ( fontObj.glyphs[key] ) {
-							fontObj.glyphs[key].solvingOrder = e.data.data[key];
+							fontObj.glyphs[key].solvingOrder = e.data[key];
 						}
 					});
 
@@ -718,8 +718,18 @@ function prepareWorker() {
 
 		// mini router
 		self.onmessage = function(e) {
+			var result;
+
 			if ( e.data.type && e.data.type in handlers ) {
-				handlers[ e.data.type ]( e.data.data, e.data.name );
+				result = handlers[ e.data.type ]( e.data.data, e.data.name );
+
+				if ( result === null ) {
+					return;
+				}
+
+				self.postMessage(
+					result,
+					result instanceof ArrayBuffer ? [ result ] : undefined );
 			}
 		};
 
@@ -728,7 +738,7 @@ function prepareWorker() {
 			if ( name in fontsMap ) {
 				font = fontsMap[name];
 				translateSubset();
-				return;
+				return null;
 			}
 
 			var fontObj = JSON.parse( fontSource );
@@ -743,10 +753,7 @@ function prepareWorker() {
 				solvingOrders[key] = font.glyphMap[key].solvingOrder;
 			});
 
-			self.postMessage({
-				type: 'solvingOrders',
-				data: solvingOrders
-			});
+			return solvingOrders;
 		};
 
 		handlers.update = function( params ) {
@@ -760,8 +767,7 @@ function prepareWorker() {
 			// main thread when calling view.update();
 			font._project._updateVersion++;
 			font.updateOTCommands();
-			var buffer = font.ot.toBuffer();
-			self.postMessage( buffer, [ buffer ] );
+			return font.ot.toBuffer();
 		};
 
 		handlers.subset = function( set ) {
@@ -770,6 +776,10 @@ function prepareWorker() {
 			});
 			font.subset = set;
 			currSubset = font.subset;
+
+			if ( !currValues ) {
+				return true;
+			}
 
 			// search for glyphs *added* to the subset
 			currSubset.filter(function( glyph ) {
@@ -786,8 +796,7 @@ function prepareWorker() {
 			font.ot.glyphs = font.getGlyphSubset().map(function( glyph ) {
 				return glyph.ot;
 			});
-			var buffer = font.ot.toBuffer();
-			self.postMessage( buffer, [ buffer ] );
+			return font.ot.toBuffer();
 		};
 
 		handlers.otfFont = function() {
@@ -796,8 +805,7 @@ function prepareWorker() {
 			font.update( currValues, allChars );
 
 			font.updateOTCommands( allChars );
-			var buffer = font.ot.toBuffer();
-			self.postMessage( buffer, [ buffer ] );
+			return font.ot.toBuffer();
 		};
 
 		// handlers.svgFont = function() {

@@ -15,7 +15,7 @@ var canvasEl = document.createElement('canvas'),
 		aperture: 1,
 		opticThickness: 1,
 		curviness: 0.6,
-		breakPath: 0,
+		breakPath: 1,
 		axis: 0,
 		serifWidth: 65,
 		midWidth: 1,
@@ -34,9 +34,14 @@ var canvasEl = document.createElement('canvas'),
 		ascenderHeight: 750,
 		spacing: 1.1
 	},
+	char = 'A',
 	alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-	// alphabet = 'A';
 
+$('#glyphList').val( char );
+$('#sample').val( alphabet );
+$('#outline').attr({ checked: false });
+$('#nodes').attr({ checked: false });
+$('#coords').attr({ checked: false });
 canvasEl.width = 1024;
 canvasEl.height = 1024;
 
@@ -55,14 +60,9 @@ window.PrototypoCanvas.init({
 		'john-fell', 'node_modules/john-fell.ptf/dist/font.json');
 
 }).then(function( instance ) {
-	instance.update( values );
-	instance.displayChar( 'a' );
+	instance.displayChar( char );
 	instance.subset = alphabet;
-	$('#glyphList').val('a');
-	$('#sample').val( alphabet );
-	$('#outline').attr({ checked: false });
-	$('#nodes').attr({ checked: false });
-	$('#coords').attr({ checked: false });
+	instance.update( values );
 
 	$('#zoomIn').on('click', function() {
 		instance.zoomIn();

@@ -44,15 +44,15 @@ module.exports = function loadFont( name, fontSource ) {
 		return new Promise(function( resolve ) {
 			var fontObj = JSON.parse( fontSource ),
 				handler = function( e ) {
-					if ( e.data.type !== 'solvingOrders' ) {
+					if ( typeof e.data !== 'object' ) {
 						return;
 					}
 					this.worker.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
-					Object.keys( e.data.data ).forEach(function(key) {
+					Object.keys( e.data ).forEach(function(key) {
 						if ( fontObj.glyphs[key] ) {
-							fontObj.glyphs[key].solvingOrder = e.data.data[key];
+							fontObj.glyphs[key].solvingOrder = e.data[key];
 						}
 					});
 
