@@ -1,3 +1,16 @@
+function displayComponents( glyph, showNodes ) {
+	glyph.components.forEach(function(component) {
+		component.visible = true;
+		component.contours.forEach(function(contour) {
+			contour.fullySelected = showNodes && !contour.skeleton;
+		});
+
+		if ( component.components.length ) {
+			displayComponents( component, showNodes );
+		}
+	});
+}
+
 function displayGlyph( _glyph ) {
 	var glyph =
 			// no glyph means we're switching fill mode for the current glyph
@@ -40,12 +53,9 @@ function displayGlyph( _glyph ) {
 		contour.fullySelected = this._showNodes && !contour.skeleton;
 	}, this);
 
-	this.currGlyph.components.forEach(function(component) {
-		component.visible = true;
-		component.contours.forEach(function(contour) {
-			contour.fullySelected = this._showNodes && !contour.skeleton;
-		}, this);
-	}, this);
+	if ( this.currGlyph.components.length ) {
+		displayComponents( this.currGlyph, this._showNodes );
+	}
 
 	this.view._project._needsUpdate = true;
 	this.view.update();

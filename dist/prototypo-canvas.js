@@ -321,6 +321,19 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 module.exports = PrototypoCanvas;
 
 },{"./utils/glyph":3,"./utils/init":4,"./utils/loadFont":5,"./utils/mouseHandlers":6,"es6-object-assign":1}],3:[function(require,module,exports){
+function displayComponents( glyph, showNodes ) {
+	glyph.components.forEach(function(component) {
+		component.visible = true;
+		component.contours.forEach(function(contour) {
+			contour.fullySelected = showNodes && !contour.skeleton;
+		});
+
+		if ( component.components.length ) {
+			displayComponents( component, showNodes );
+		}
+	});
+}
+
 function displayGlyph( _glyph ) {
 	var glyph =
 			// no glyph means we're switching fill mode for the current glyph
@@ -363,12 +376,9 @@ function displayGlyph( _glyph ) {
 		contour.fullySelected = this._showNodes && !contour.skeleton;
 	}, this);
 
-	this.currGlyph.components.forEach(function(component) {
-		component.visible = true;
-		component.contours.forEach(function(contour) {
-			contour.fullySelected = this._showNodes && !contour.skeleton;
-		}, this);
-	}, this);
+	if ( this.currGlyph.components.length ) {
+		displayComponents( this.currGlyph, this._showNodes );
+	}
 
 	this.view._project._needsUpdate = true;
 	this.view.update();
@@ -691,14 +701,6 @@ function prepareWorker() {
 			fontsMap = {},
 			currValues,
 			currSubset = [],
-			//jscs:disable
-			// template = function svg(_font, glyphs) {
-			// 	return '<?xml version="1.0" standalone="no"?>\n<!DOCTYPE svg PUBLIC\n\t"-//W3C//DTD SVG 1.1//EN"\n\t"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n<svg xmlns="http://www.w3.org/2000/svg">\n<metadata></metadata>\n<defs>\n<font id="' + _font.ot.familyName.replace(' ', '') + '" horiz-adv-x="1191">\n<font-face\n\tfont-family="' + _font.ot.familyName + '"\n\tfont-weight="500"\n\tfont-stretch="normal"\n\tunits-per-em="1024"\n\tascent="' + _font.fontinfo.ascender + '"\n\tdescent="' + _font.fontinfo.descender + '" />\n<missing-glyph horiz-adv-x="500" />\n<glyph name=".notdef" unicode="&#xd;" horiz-adv-x="681" />\n' + glyphs.map(function (glyph) {
-			// 		// exclude .notdef, which is included above with valid unicode
-			// 		return glyph.ot.unicode === 0 ? '' : '<glyph\n\t\tname="' + glyph.name + '"\n\t\tunicode="&#' + glyph.ot.unicode + ';"\n\t\thoriz-adv-x="' + glyph.ot.advanceWidth + '"\n\t\td="' + glyph.svgData + '"/>';
-			// 	}).join('\n') + '\n</font>\n</defs>\n</svg>';
-			// },
-			//jscs:enable
 			translateSubset = function() {
 				if ( !currSubset.length ) {
 					return;
@@ -706,7 +708,7 @@ function prepareWorker() {
 
 				font.subset = currSubset.map(function( glyph ) {
 					return font.charMap[ glyph.ot.unicode ];
-				}).filter(function( glyph ) { return glyph; });
+				}).filter(Boolean);
 
 				currSubset = font.subset;
 			};
@@ -758,9 +760,6 @@ function prepareWorker() {
 
 		handlers.update = function( params ) {
 			currValues = params;
-			// Why did I do that?
-			// // invalidate the previous subset
-			// currSubset = [];
 			font.update( currValues );
 			// the following is required so that the globalMatrix of glyphs
 			// takes the font matrix into account. I assume this is done in the
@@ -807,15 +806,6 @@ function prepareWorker() {
 			font.updateOTCommands( allChars );
 			return font.ot.toBuffer();
 		};
-
-		// handlers.svgFont = function() {
-		// 	// force-update of the whole font, ignoring the current subset
-		// 	var allChars = font.getGlyphSubset( false );
-		// 	font.update( currValues, allChars );
-		//
-		// 	font.updateSVGData( allChars );
-		// 	self.postMessage( template( font, allChars ) );
-		// };
 	}
 
 	// This is how bundle dependencies are loaded
