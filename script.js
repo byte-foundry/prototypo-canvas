@@ -1,5 +1,4 @@
-var canvasEl = document.createElement('canvas'),
-	prototypo = window.prototypo,
+var prototypo = window.prototypo,
 	paper = prototypo.paper,
 	values = {
 		xHeight: 500,
@@ -42,13 +41,10 @@ $('#sample').val( alphabet );
 $('#outline').attr({ checked: false });
 $('#nodes').attr({ checked: false });
 $('#coords').attr({ checked: false });
-canvasEl.width = 1024;
-canvasEl.height = 1024;
-
-document.getElementById('main').appendChild( canvasEl );
+$('#profile').attr({ checked: false });
 
 window.PrototypoCanvas.init({
-	canvas: canvasEl,
+	canvas: document.getElementById('canvas'),
 	// comment the following line to test "production mode", where worker is
 	// built from source instead of file
 	workerUrl: 'src/worker.js',
@@ -122,6 +118,38 @@ window.PrototypoCanvas.init({
 			$('#sample')[0].style.fontFamily = '"Prototypo John Fell"';
 		});
 
+	});
+
+	var $perfs = $('#perfs'),
+		frameRequest,
+		workerProfile;
+	function updateLoop() {
+		frameRequest = window.requestAnimationFrame(updateLoop);
+
+		values.thickness = 30 + Math.random() * 150;
+		// update only the worker
+		instance.enqueue({
+			type: 'update',
+			data: values,
+			callback: function() {
+				workerProfile.count++;
+				workerProfile.end = performance.now();
+				$perfs.text( ( workerProfile.end - workerProfile.start ) /
+					workerProfile.count );
+			}
+		});
+	}
+	$('#profile').on('change', function( event ) {
+		if ( $(event.target).is(':checked') ) {
+			workerProfile = {
+				start: performance.now(),
+				count: 0
+			};
+			updateLoop();
+
+		} else {
+			window.cancelAnimationFrame(frameRequest);
+		}
 	});
 
 	paper.view.update();
