@@ -73,6 +73,28 @@ function prepareWorker() {
 			return font.ot.toBuffer();
 		};
 
+		handlers.alternate = function( params ) {
+			font.setAlternateFor( params.unicode, params.glyphName );
+
+			if (!currValues) {
+				return true;
+			}
+
+			font.subset = font.subset.map(function( glyph ) {
+				return String.fromCharCode(glyph.unicode);
+			}).join('');
+
+			var altGlyph = font.glyphMap[params.glyphName];
+
+			altGlyph.update( currValues );
+			altGlyph.updateOTCommands();
+
+			font.ot.glyphs = font.getGlyphSubset().map(function( glyph ) {
+				return glyph.ot;
+			});
+			return font.ot.toBuffer();
+		};
+
 		handlers.subset = function( set ) {
 			var prevGlyphs = currSubset.map(function( glyph ) {
 				return glyph.name;

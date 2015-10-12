@@ -173,7 +173,14 @@ _.assign( paper.settings, {
 // defined arbitrarily, and any message previously present
 // at this position will be overwritten. The priorities associated to the
 // message type are hardcoded below (in ascending priority order).
-PrototypoCanvas.priorities = [ 'update', 'subset', 'svgFont', 'otfFont' ];
+PrototypoCanvas.priorities = [
+	'update',
+	'subset',
+	'svgFont',
+	'otfFont',
+	'alternate'
+];
+
 PrototypoCanvas.prototype.enqueue = function( message ) {
 	this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ] = message;
 	this.dequeue();
@@ -218,6 +225,22 @@ PrototypoCanvas.prototype.update = function( values ) {
 		type: 'update',
 		data: values
 	});
+};
+
+PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
+	this.font.setAlternateFor( unicode, glyphName );
+
+	this.displayChar( this.font.glyphMap[glyphName] );
+
+	this.enqueue({
+		type: 'alternate',
+		data: {
+			unicode: unicode,
+			glyphName: glyphName
+		}
+	});
+
+	this.update( this.latestValues );
 };
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
