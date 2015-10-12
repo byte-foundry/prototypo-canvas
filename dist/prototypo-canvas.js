@@ -47,7 +47,7 @@ module.exports = {
 };
 
 },{}],2:[function(require,module,exports){
-var prototypo = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null),
+var prototypo = (typeof window !== "undefined" ? window['prototypo'] : typeof global !== "undefined" ? global['prototypo'] : null),
 	assign = require('es6-object-assign').assign,
 	// Grid = require('./grid'),
 	glyph = require('./utils/glyph'),
@@ -61,6 +61,7 @@ var _ = { assign: assign },
 // constructor
 function PrototypoCanvas( opts ) {
 	paper.setup( opts.canvas );
+	paper.settings.hitTolerance = 1;
 	// enable pointerevents on the canvas
 	opts.canvas.setAttribute('touch-action', 'none');
 
@@ -268,7 +269,7 @@ PrototypoCanvas.prototype.update = function( values ) {
 	});
 };
 
-PrototypoCanvas.prototype.download = function( cb, name ) {
+PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	if ( !this.worker || !this.latestValues ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
@@ -277,7 +278,11 @@ PrototypoCanvas.prototype.download = function( cb, name ) {
 
 	this.enqueue({
 		type: 'otfFont',
-		data: name,
+		data: {
+			family: name.family,
+			style: name.style,
+			merged: merged
+		},
 		callback: function( data ) {
 			this.font.download( data );
 			if ( cb ) {
@@ -621,7 +626,7 @@ module.exports = function loadFont( name, fontSource ) {
 };
 
 },{}],6:[function(require,module,exports){
-var paper = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null).paper;
+var paper = (typeof window !== "undefined" ? window['prototypo'] : typeof global !== "undefined" ? global['prototypo'] : null).paper;
 
 function wheelHandler( event ) {
 	var bcr = this.canvas.getBoundingClientRect(),
@@ -798,12 +803,14 @@ function prepareWorker() {
 			return font.ot.toBuffer();
 		};
 
-		handlers.otfFont = function() {
+		handlers.otfFont = function(data) {
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
 			font.update( currValues, allChars );
 
-			font.updateOTCommands( allChars );
+			font.updateOTCommands( allChars, data.merged );
+			font.ot.familyName = data.family;
+			font.ot.styleName = data.style;
 			return font.ot.toBuffer();
 		};
 	}

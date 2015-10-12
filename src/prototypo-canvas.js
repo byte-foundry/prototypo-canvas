@@ -12,6 +12,7 @@ var _ = { assign: assign },
 // constructor
 function PrototypoCanvas( opts ) {
 	paper.setup( opts.canvas );
+	paper.settings.hitTolerance = 1;
 	// enable pointerevents on the canvas
 	opts.canvas.setAttribute('touch-action', 'none');
 
@@ -219,7 +220,7 @@ PrototypoCanvas.prototype.update = function( values ) {
 	});
 };
 
-PrototypoCanvas.prototype.download = function( cb, name ) {
+PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	if ( !this.worker || !this.latestValues ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
@@ -228,7 +229,11 @@ PrototypoCanvas.prototype.download = function( cb, name ) {
 
 	this.enqueue({
 		type: 'otfFont',
-		data: name,
+		data: {
+			family: name.family,
+			style: name.style,
+			merged: merged
+		},
 		callback: function( data ) {
 			this.font.download( data );
 			if ( cb ) {

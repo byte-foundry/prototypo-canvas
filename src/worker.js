@@ -102,12 +102,14 @@ function prepareWorker() {
 			return font.ot.toBuffer();
 		};
 
-		handlers.otfFont = function() {
+		handlers.otfFont = function(data) {
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
 			font.update( currValues, allChars );
 
-			font.updateOTCommands( allChars );
+			font.updateOTCommands( allChars, data.merged );
+			font.ot.familyName = data.family;
+			font.ot.styleName = data.style;
 			return font.ot.toBuffer();
 		};
 	}
