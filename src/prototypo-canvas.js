@@ -36,6 +36,7 @@ function PrototypoCanvas( opts ) {
 	this._showNodes = this.opts.showNodes;
 	this.fontsMap = {};
 	this.isMousedown = false;
+	this.exportingZip = false;
 
 	// this.grid = new Grid( paper );
 
@@ -82,7 +83,11 @@ function PrototypoCanvas( opts ) {
 		updateLoop = function() {
 			raf(updateLoop);
 
-			if ( !this.latestRafValues || !this.currGlyph ) {
+			if (
+				!this.latestRafValues ||
+				!this.currGlyph ||
+				this.exportingZip
+			) {
 				return;
 			}
 
@@ -244,7 +249,34 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 };
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
-	if ( !this.worker || !this.latestValues ) {
+	this.generateOtf(function( data ) {
+		this.font.download( data );
+		if ( cb ) {
+			cb();
+		}
+	}.bind(this), name, merged);
+};
+
+PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
+	return new Promise(function( resolve, reject) {
+		try {
+			this.generateOtf( function( data ) {
+				resolve( {
+					buffer: data,
+					variant: name.style
+				});
+				if ( cb ) {
+					cb();
+				}
+			}, name, merged, values );
+		} catch ( err ) {
+			reject(err);
+		}
+	}.bind(this));
+};
+
+PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
+	if ( !this.worker || ( !this.latestValues && !values ) ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
 		return false;
@@ -255,14 +287,14 @@ PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 		data: {
 			family: name.family,
 			style: name.style,
-			merged: merged
+			merged: merged,
+			values: values
 		},
 		callback: function( data ) {
-			this.font.download( data );
 			if ( cb ) {
-				cb();
+				cb(data);
 			}
-		}.bind(this)
+		}
 	});
 };
 

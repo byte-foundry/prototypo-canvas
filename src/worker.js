@@ -127,12 +127,26 @@ function prepareWorker() {
 		handlers.otfFont = function(data) {
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
-			font.update( currValues, allChars );
+			var fontValues = data.values || currValues;
+			font.update( fontValues, allChars );
 
 			font.updateOTCommands( allChars, data.merged );
+
+			var family = font.ot.familyName;
+			var style = font.ot.styleName;
+
+			//TODO: understand why we need to save the familyName and
+			//and set them back into the font.ot for it to be able to
+			//export multiple font
 			font.ot.familyName = data.family;
 			font.ot.styleName = data.style;
-			return font.ot.toBuffer();
+
+			var result = font.ot.toBuffer();
+
+			font.ot.familyName = family;
+			font.ot.styleName = style;
+
+			return result;
 		};
 	}
 
