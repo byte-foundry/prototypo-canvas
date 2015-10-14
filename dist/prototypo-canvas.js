@@ -47,7 +47,7 @@ module.exports = {
 };
 
 },{}],2:[function(require,module,exports){
-var prototypo = (typeof window !== "undefined" ? window['prototypo'] : typeof global !== "undefined" ? global['prototypo'] : null),
+var prototypo = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null),
 	assign = require('es6-object-assign').assign,
 	// Grid = require('./grid'),
 	glyph = require('./utils/glyph'),
@@ -698,7 +698,7 @@ module.exports = function loadFont( name, fontSource ) {
 };
 
 },{}],6:[function(require,module,exports){
-var paper = (typeof window !== "undefined" ? window['prototypo'] : typeof global !== "undefined" ? global['prototypo'] : null).paper;
+var paper = (typeof window !== "undefined" ? window.prototypo : typeof global !== "undefined" ? global.prototypo : null).paper;
 
 function wheelHandler( event ) {
 	var bcr = this.canvas.getBoundingClientRect(),
@@ -913,10 +913,10 @@ function prepareWorker() {
 		handlers.otfFont = function(data) {
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
-			var fontValues = data && data.values ? data.values : currValues;
+			var fontValues = data && data.values || currValues;
 			font.update( fontValues, allChars );
 
-			font.updateOTCommands( allChars, data && data.merged ? data.merged : false );
+			font.updateOTCommands( allChars, data && data.merged || false );
 
 			var family = font.ot.familyName;
 			var style = font.ot.styleName;
@@ -924,8 +924,8 @@ function prepareWorker() {
 			//TODO: understand why we need to save the familyName and
 			//and set them back into the font.ot for it to be able to
 			//export multiple font
-			font.ot.familyName = data && data.family ? data.family : 'Prototypo';
-			font.ot.styleName = data && data.family ? data.style : 'regular';
+			font.ot.familyName = data && data.family || 'Prototypo';
+			font.ot.styleName = data && data.style || 'regular';
 
 			var result = font.ot.toBuffer();
 
