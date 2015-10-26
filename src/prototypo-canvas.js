@@ -250,11 +250,11 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	this.generateOtf(function( data ) {
-		this.font.download( data );
+		this.font.download( data, merged, name.family, 'test');
 		if ( cb ) {
 			cb();
 		}
-	}.bind(this), name, merged);
+	}.bind(this), name);
 };
 
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
