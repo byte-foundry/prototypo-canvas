@@ -282,18 +282,35 @@ PrototypoCanvas.prototype.update = function( values ) {
 };
 
 PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
-	this.font.setAlternateFor( unicode, glyphName );
+	if ( !glyphName ) {
+		Object.keys(unicode).forEach(function(code) {
 
-	this.displayChar( this.font.glyphMap[glyphName] );
+			if (parseInt(code) === this.currGlyph.src.unicode) {
+				this.displayChar( this.font.glyphMap[unicode[code]] );
+			}
 
-	this.enqueue({
-		type: 'alternate',
-		data: {
-			unicode: unicode,
-			glyphName: glyphName
-		}
-	});
+			this.font.setAlternateFor(code, unicode[code]);
+		}.bind(this));
 
+		this.enqueue({
+			type: 'alternate',
+			data: {
+				altList: unicode
+			}
+		});
+	} else {
+		this.font.setAlternateFor( unicode, glyphName );
+
+		this.displayChar( this.font.glyphMap[glyphName] );
+
+		this.enqueue({
+			type: 'alternate',
+			data: {
+				unicode: unicode,
+				glyphName: glyphName
+			}
+		});
+	}
 	this.update( this.latestValues );
 };
 
@@ -829,7 +846,7 @@ function prepareWorker() {
 			return font.ot.toBuffer();
 		};
 
-		handlers.alternate = function( params ) {
+		handlers.soloAlternate = function( params ) {
 			font.setAlternateFor( params.unicode, params.glyphName );
 
 			if (!currValues) {
@@ -849,6 +866,19 @@ function prepareWorker() {
 				return glyph.ot;
 			});
 			return font.ot.toBuffer();
+		};
+
+		handlers.alternate = function( params ) {
+			if ( params.altList ) {
+				Object.keys( params.altList ).forEach(function( unicode ) {
+					handlers.soloAlternate({
+						unicode: unicode,
+						glyphName: params.altList[unicode]
+					});
+				});
+			} else {
+				handlers.soloAlternate( params );
+			}
 		};
 
 		handlers.subset = function( set ) {

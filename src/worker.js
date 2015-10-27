@@ -73,7 +73,7 @@ function prepareWorker() {
 			return font.ot.toBuffer();
 		};
 
-		handlers.alternate = function( params ) {
+		handlers.soloAlternate = function( params ) {
 			font.setAlternateFor( params.unicode, params.glyphName );
 
 			if (!currValues) {
@@ -93,6 +93,19 @@ function prepareWorker() {
 				return glyph.ot;
 			});
 			return font.ot.toBuffer();
+		};
+
+		handlers.alternate = function( params ) {
+			if ( params.altList ) {
+				Object.keys( params.altList ).forEach(function( unicode ) {
+					handlers.soloAlternate({
+						unicode: unicode,
+						glyphName: params.altList[unicode]
+					});
+				});
+			} else {
+				handlers.soloAlternate( params );
+			}
 		};
 
 		handlers.subset = function( set ) {

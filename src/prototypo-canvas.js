@@ -233,18 +233,35 @@ PrototypoCanvas.prototype.update = function( values ) {
 };
 
 PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
-	this.font.setAlternateFor( unicode, glyphName );
+	if ( !glyphName ) {
+		Object.keys(unicode).forEach(function(code) {
 
-	this.displayChar( this.font.glyphMap[glyphName] );
+			if (parseInt(code) === this.currGlyph.src.unicode) {
+				this.displayChar( this.font.glyphMap[unicode[code]] );
+			}
 
-	this.enqueue({
-		type: 'alternate',
-		data: {
-			unicode: unicode,
-			glyphName: glyphName
-		}
-	});
+			this.font.setAlternateFor(code, unicode[code]);
+		}.bind(this));
 
+		this.enqueue({
+			type: 'alternate',
+			data: {
+				altList: unicode
+			}
+		});
+	} else {
+		this.font.setAlternateFor( unicode, glyphName );
+
+		this.displayChar( this.font.glyphMap[glyphName] );
+
+		this.enqueue({
+			type: 'alternate',
+			data: {
+				unicode: unicode,
+				glyphName: glyphName
+			}
+		});
+	}
 	this.update( this.latestValues );
 };
 
