@@ -1,6 +1,7 @@
 // this needs to be manually converted and inlined in worker.js
-// until I figure ou a way to require stuff inside that worker.js
+// until I figure out a way to require stuff inside that worker.js
 module.exports = function svg( _font, glyphs ) {
+	var enFamilyName = _font.ot.getEnglishName('fontFamily');
 	return (
 `<?xml version="1.0" standalone="no"?>
 <!DOCTYPE svg PUBLIC
@@ -9,9 +10,9 @@ module.exports = function svg( _font, glyphs ) {
 <svg xmlns="http://www.w3.org/2000/svg">
 <metadata></metadata>
 <defs>
-<font id="${ _font.ot.familyName.replace(' ', '') }" horiz-adv-x="1191">
+<font id="${ enFamilyName.replace(' ', '') }" horiz-adv-x="1191">
 <font-face
-	font-family="${ _font.ot.familyName }"
+	font-family="${ enFamilyName }"
 	font-weight="500"
 	font-stretch="normal"
 	units-per-em="1024"

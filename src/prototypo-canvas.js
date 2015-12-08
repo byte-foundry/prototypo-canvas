@@ -267,7 +267,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	this.generateOtf(function( data ) {
-		this.font.download( data, merged, name.family, 'test');
+		this.font.download( data, name, merged );
 		if ( cb ) {
 			cb();
 		}
@@ -302,8 +302,8 @@ PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
 	this.enqueue({
 		type: 'otfFont',
 		data: {
-			family: name.family,
-			style: name.style,
+			family: name && name.family,
+			style: name && name.style,
 			merged: merged,
 			values: values
 		},

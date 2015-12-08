@@ -316,7 +316,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	this.generateOtf(function( data ) {
-		this.font.download( data, merged, name.family, 'test');
+		this.font.download( data, name, merged );
 		if ( cb ) {
 			cb();
 		}
@@ -351,8 +351,8 @@ PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
 	this.enqueue({
 		type: 'otfFont',
 		data: {
-			family: name.family,
-			style: name.style,
+			family: name && name.family,
+			style: name && name.style,
 			merged: merged,
 			values: values
 		},
@@ -843,7 +843,8 @@ function prepareWorker() {
 			// main thread when calling view.update();
 			font._project._updateVersion++;
 			font.updateOTCommands();
-			return font.ot.toBuffer();
+			var result = font.toArrayBuffer();
+			return result;
 		};
 
 		handlers.soloAlternate = function( params ) {
@@ -862,10 +863,12 @@ function prepareWorker() {
 			altGlyph.update( currValues );
 			altGlyph.updateOTCommands();
 
-			font.ot.glyphs = font.getGlyphSubset().map(function( glyph ) {
-				return glyph.ot;
-			});
-			return font.ot.toBuffer();
+			// Recreate the correct font.ot.glyphs.glyphs object, without
+			// touching the ot commands
+			// Recreate the correct font.ot.glyphs.glyphs object, without
+			// touching the ot commands
+			font.updateOT({ set: undefined });
+			return font.toArrayBuffer();
 		};
 
 		handlers.alternate = function( params ) {
@@ -902,12 +905,10 @@ function prepareWorker() {
 				glyph.updateOTCommands();
 			});
 
-			// Recreate the correct font.ot.glyphs array, without touching the
-			// ot commands
-			font.ot.glyphs = font.getGlyphSubset().map(function( glyph ) {
-				return glyph.ot;
-			});
-			return font.ot.toBuffer();
+			// Recreate the correct font.ot.glyphs.glyphs object, without
+			// touching the ot commands
+			font.updateOT({ set: undefined });
+			return font.toArrayBuffer();
 		};
 
 		handlers.otfFont = function(data) {
@@ -927,7 +928,7 @@ function prepareWorker() {
 			font.ot.familyName = data && data.family || 'Prototypo';
 			font.ot.styleName = data && data.style || 'regular';
 
-			var result = font.ot.toBuffer();
+			var result = font.toArrayBuffer();
 
 			font.ot.familyName = family;
 			font.ot.styleName = style;
