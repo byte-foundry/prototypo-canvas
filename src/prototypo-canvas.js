@@ -1,10 +1,10 @@
-var prototypo = require('prototypo.js'),
-	assign = require('es6-object-assign').assign,
-	// Grid = require('./grid'),
-	glyph = require('./utils/glyph'),
-	mouseHandlers = require('./utils/mouseHandlers'),
-	init = require('./utils/init'),
-	loadFont = require('./utils/loadFont');
+var prototypo		= require('prototypo.js'),
+	assign			= require('es6-object-assign').assign,
+	EventEmitter	= require('wolfy87-eventemitter'),
+	glyph			= require('./utils/glyph'),
+	mouseHandlers	= require('./utils/mouseHandlers'),
+	init			= require('./utils/init'),
+	loadFont		= require('./utils/loadFont');
 
 var _ = { assign: assign },
 	paper = prototypo.paper;
@@ -53,7 +53,11 @@ function PrototypoCanvas( opts ) {
 
 			// default callback for buffers: use it as a font
 			} else if ( e.data instanceof ArrayBuffer ) {
-				this.font.addToFonts( e.data );
+				try {
+					this.font.addToFonts( e.data );
+				} catch ( error ) {
+					this.emitEvent( 'fonterror', [ error ] );
+				}
 			}
 
 			this.currentJob = false;
@@ -101,6 +105,7 @@ function PrototypoCanvas( opts ) {
 
 PrototypoCanvas.init = init;
 PrototypoCanvas.prototype.loadFont = loadFont;
+PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
 _.assign( PrototypoCanvas.prototype, mouseHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
@@ -267,7 +272,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 
 PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 	this.generateOtf(function( data ) {
-		this.font.download( data, name, merged );
+		this.font.download( data, merged, name );
 		if ( cb ) {
 			cb();
 		}
@@ -275,7 +280,7 @@ PrototypoCanvas.prototype.download = function( cb, name, merged ) {
 };
 
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
-	return new Promise(function( resolve, reject) {
+	return new Promise(function( resolve, reject ) {
 		try {
 			this.generateOtf( function( data ) {
 				resolve( {

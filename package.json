@@ -76,6 +76,7 @@
     "venus.ptf": "byte-foundry/venus.ptf",
     "vinyl-buffer": "^1.0.0",
     "vinyl-source-stream": "^1.1.0",
-    "watchify": "^2.6.0"
+    "watchify": "^2.6.0",
+    "wolfy87-eventemitter": "^4.3.0"
   }
 }
