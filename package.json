@@ -8,6 +8,7 @@
     "url": "https://github.com/byte-foundry/prototypo-canvas/issues"
   },
   "homepage": "https://github.com/byte-foundry/prototypo-canvas",
+  "main": "dist/prototypo-canvas.js",
   "scripts": {
     "gulp": "gulp",
     "help": "gulp --tasks",

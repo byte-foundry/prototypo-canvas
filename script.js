@@ -84,7 +84,15 @@ window.PrototypoCanvas.init({
 		instance.update( values );
 	});
 	$('#export').on('click', function() {
-		instance.download(null, null, true);
+		instance.download();
+	});
+	$('#exportv').on('click', function() {
+		values.slant = 0;
+		instance.download(function() {
+			values.slant = 45;
+			instance.download(null, { style: 'italic' }, false, values);
+
+		}, { style: 'regular' }, false, values);
 	});
 	$('#glyphr').on('click', function() {
 		instance.openInGlyphr();

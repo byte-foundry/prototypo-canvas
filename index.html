@@ -40,26 +40,43 @@
 		<!--[if lt IE 10]>
 			<p class="chromeframe">You are using an outdated browser. <a href="http://browsehappy.com/">Upgrade your browser today</a> or <a href="http://www.google.com/chromeframe/?redirect=true">install Google Chrome Frame</a> to better experience this site.</p>
 		<![endif]-->
-		<div id="main" role="main">
-			<button id="zoomIn">+</button>
-			<button id="zoomReset">0</button>
-			<button id="zoomOut">-</button>
-			<input type="text" id="glyphList" maxlength="1" size="1" value="A" />
-			Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
-			Slant: <input type="range" id="slant" min="-45" max="45" step="1" />
-			<button id="export">⭳ export</button>
-			<button id="glyphr">⤇ Glyphr</button>
-			<input type="checkbox" id="outline" /><label for="outline">Outline</label>
-			<input type="checkbox" id="nodes" /><label for="nodes">Nodes</label>
-			<input type="checkbox" id="coords" /><label for="coords">Coords</label>
-			<button id="load-venus">load venus</button>
-			<button id="load-john">load john</button>
-			<input type="checkbox" id="profile" /><label for="profile">Profile</label>
-			<span id="perfs"></span>
+		<div id="main" role="main" style="display:flex;">
+			<div>
+				<textarea id="sample">ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</textarea>
 
-			<textarea id="sample">ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz</textarea>
-
-			<canvas id="canvas" width="1024" height="1024"></canvas>
+				<canvas id="canvas" width="1024" height="1024"></canvas>
+			</div>
+			<div>
+				<div>
+					<button id="zoomReset">0</button>
+					<button id="zoomOut">-</button>
+					<input type="text" id="glyphList" maxlength="1" size="1" value="A" />
+				</div>
+				<div>
+					Thickness: <input type="range" id="thickness" min="4" max="180" step="1" />
+				</div>
+				<div>
+					Slant: <input type="range" id="slant" min="-45" max="45" step="1" />
+				</div>
+				<div>
+					<button id="export">⭳ export</button>
+					<button id="glyphr">⤇ Glyphr</button>
+					<button id="exportv">⭳ exportV</button>
+				</div>
+				<div>
+					<input type="checkbox" id="outline" /><label for="outline">Outline</label>
+					<input type="checkbox" id="nodes" /><label for="nodes">Nodes</label>
+					<input type="checkbox" id="coords" /><label for="coords">Coords</label>
+				</div>
+				<div>
+					<button id="load-venus">load venus</button>
+					<button id="load-john">load john</button>
+				</div>
+				<div>
+					<input type="checkbox" id="profile" /><label for="profile">Profile</label>
+					<span id="perfs"></span>
+				</div>
+			</div>
 		</div>
 
 		<script src="node_modules/jquery/dist/jquery.js"></script>

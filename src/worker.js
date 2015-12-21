@@ -65,10 +65,6 @@ function prepareWorker() {
 		handlers.update = function( params ) {
 			currValues = params;
 			font.update( currValues );
-			// the following is required so that the globalMatrix of glyphs
-			// takes the font matrix into account. I assume this is done in the
-			// main thread when calling view.update();
-			font._project._updateVersion++;
 			font.updateOTCommands();
 			var result = font.toArrayBuffer();
 			return result;

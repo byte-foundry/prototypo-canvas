@@ -103,9 +103,9 @@ function PrototypoCanvas( opts ) {
 	updateLoop();
 }
 
+PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
 PrototypoCanvas.init = init;
 PrototypoCanvas.prototype.loadFont = loadFont;
-PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
 _.assign( PrototypoCanvas.prototype, mouseHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
@@ -270,13 +270,13 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 	this.update( this.latestValues );
 };
 
-PrototypoCanvas.prototype.download = function( cb, name, merged ) {
+PrototypoCanvas.prototype.download = function( cb, name, merged, values ) {
 	this.generateOtf(function( data ) {
 		this.font.download( data, merged, name );
 		if ( cb ) {
 			cb();
 		}
-	}.bind(this), name);
+	}.bind(this), name, merged, values);
 };
 
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {

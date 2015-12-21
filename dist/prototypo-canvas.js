@@ -581,7 +581,7 @@ function PrototypoCanvas( opts ) {
 				try {
 					this.font.addToFonts( e.data );
 				} catch ( error ) {
-					this.emitEvent( error );
+					this.emitEvent( 'fonterror', [ error ] );
 				}
 			}
 
@@ -628,9 +628,9 @@ function PrototypoCanvas( opts ) {
 	updateLoop();
 }
 
+PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
 PrototypoCanvas.init = init;
 PrototypoCanvas.prototype.loadFont = loadFont;
-PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
 _.assign( PrototypoCanvas.prototype, mouseHandlers );
 
 Object.defineProperties( PrototypoCanvas.prototype, {
@@ -795,13 +795,13 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 	this.update( this.latestValues );
 };
 
-PrototypoCanvas.prototype.download = function( cb, name, merged ) {
+PrototypoCanvas.prototype.download = function( cb, name, merged, values ) {
 	this.generateOtf(function( data ) {
 		this.font.download( data, merged, name );
 		if ( cb ) {
 			cb();
 		}
-	}.bind(this), name);
+	}.bind(this), name, merged, values);
 };
 
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
@@ -1319,10 +1319,6 @@ function prepareWorker() {
 		handlers.update = function( params ) {
 			currValues = params;
 			font.update( currValues );
-			// the following is required so that the globalMatrix of glyphs
-			// takes the font matrix into account. I assume this is done in the
-			// main thread when calling view.update();
-			font._project._updateVersion++;
 			font.updateOTCommands();
 			var result = font.toArrayBuffer();
 			return result;
