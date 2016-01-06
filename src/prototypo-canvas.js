@@ -270,9 +270,9 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 	this.update( this.latestValues );
 };
 
-PrototypoCanvas.prototype.download = function( cb, name, merged, values ) {
+PrototypoCanvas.prototype.download = function( cb, name, merged, username, values ) {
 	this.generateOtf(function( data ) {
-		this.font.download( data, merged, name );
+		this.font.download( data, merged, name, username );
 		if ( cb ) {
 			cb();
 		}
