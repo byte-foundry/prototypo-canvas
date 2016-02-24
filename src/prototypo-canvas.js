@@ -1,10 +1,10 @@
-var prototypo		= require('prototypo.js'),
-	assign			= require('es6-object-assign').assign,
-	EventEmitter	= require('wolfy87-eventemitter'),
-	glyph			= require('./utils/glyph'),
-	mouseHandlers	= require('./utils/mouseHandlers'),
-	init			= require('./utils/init'),
-	loadFont		= require('./utils/loadFont');
+var prototypo		= require('prototypo.js');
+var assign			= require('es6-object-assign').assign;
+var EventEmitter	= require('wolfy87-eventemitter');
+var glyph			= require('./utils/glyph');
+var mouseHandlers	= require('./utils/mouseHandlers');
+var init			= require('./utils/init');
+var loadFont		= require('./utils/loadFont');
 
 var _ = { assign: assign },
 	paper = prototypo.paper;
@@ -55,6 +55,8 @@ function PrototypoCanvas( opts ) {
 			} else if ( e.data instanceof ArrayBuffer ) {
 				try {
 					this.font.addToFonts( e.data );
+					// this.emitEvent( 'worker.' + name );
+
 				} catch ( error ) {
 					this.emitEvent( 'fonterror', [ error ] );
 				}

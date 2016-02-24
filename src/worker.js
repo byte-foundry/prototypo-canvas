@@ -88,8 +88,6 @@ function prepareWorker() {
 
 			// Recreate the correct font.ot.glyphs.glyphs object, without
 			// touching the ot commands
-			// Recreate the correct font.ot.glyphs.glyphs object, without
-			// touching the ot commands
 			font.updateOT({ set: undefined });
 			return font.toArrayBuffer();
 		};
