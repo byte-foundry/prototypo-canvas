@@ -140,19 +140,22 @@ function prepareWorker() {
 
 			font.updateOTCommands( allChars, data && data.merged || false );
 
-			var family = font.ot.familyName;
-			var style = font.ot.styleName;
+			var family = font.ot.names.fontFamily.en;
+			var style = font.ot.names.fontSubfamily.en;
+			var fullName = font.ot.names.fullName.en;
 
 			//TODO: understand why we need to save the familyName and
 			//and set them back into the font.ot for it to be able to
 			//export multiple font
-			font.ot.familyName = data && data.family || 'Prototypo';
-			font.ot.styleName = data && data.style || 'regular';
+			font.ot.names.fontFamily.en = data && data.family || 'Prototypo';
+			font.ot.names.fontSubfamily.en = data && data.style || 'regular';
+			font.ot.names.fullName.en = font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en; 
 
 			var result = font.toArrayBuffer();
 
 			font.ot.familyName = family;
 			font.ot.styleName = style;
+			font.ot.names.fullName.en = fullName;
 
 			return result;
 		};

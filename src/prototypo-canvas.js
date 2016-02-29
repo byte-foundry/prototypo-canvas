@@ -55,7 +55,7 @@ function PrototypoCanvas( opts ) {
 			} else if ( e.data instanceof ArrayBuffer ) {
 				try {
 					this.font.addToFonts( e.data );
-					// this.emitEvent( 'worker.' + name );
+					this.emitEvent( 'worker.fontLoaded');
 
 				} catch ( error ) {
 					this.emitEvent( 'fonterror', [ error ] );
@@ -194,7 +194,15 @@ PrototypoCanvas.priorities = [
 ];
 
 PrototypoCanvas.prototype.enqueue = function( message ) {
-	this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ] = message;
+	if (this._queue[PrototypoCanvas.priorities.indexOf( message.type )] === undefined) {
+		this._queue[PrototypoCanvas.priorities.indexOf( message.type )] = []; 
+	}
+	if ( message.serialized ) {
+		this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ].push(message);
+	}
+	else {
+		this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ][0] = message;
+	}
 	this.dequeue();
 };
 
@@ -205,8 +213,8 @@ PrototypoCanvas.prototype.dequeue = function() {
 
 	// send the highest priority mesage in the queue (0 is lowest)
 	for ( var i = this._queue.length; i--; ) {
-		if ( this._queue[i] ) {
-			this.currentJob = this._queue[i];
+		if ( this._queue[i] && this._queue[i].length > 0 ) {
+			this.currentJob = this._queue[i].shift();
 
 			// the callback function shouldn't be sent
 			var cb = this.currentJob.callback;
@@ -215,7 +223,6 @@ PrototypoCanvas.prototype.dequeue = function() {
 			this.worker.postMessage( this.currentJob );
 
 			this.currentJob.callback = cb;
-			this._queue[i] = null;
 			break;
 		}
 	}
@@ -293,14 +300,14 @@ PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
 				if ( cb ) {
 					cb();
 				}
-			}, name, merged, values );
+			}, name, merged, values, true);
 		} catch ( err ) {
 			reject(err);
 		}
 	}.bind(this));
 };
 
-PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
+PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values, serialized) {
 	if ( !this.worker || ( !this.latestValues && !values ) ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
@@ -319,7 +326,8 @@ PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
 			if ( cb ) {
 				cb(data);
 			}
-		}
+		},
+		serialized: serialized
 	});
 };
 
