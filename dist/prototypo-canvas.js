@@ -1426,14 +1426,23 @@ return /******/ (function(modules) { // webpackBootstrap
 				//TODO: understand why we need to save the familyName and
 				//and set them back into the font.ot for it to be able to
 				//export multiple font
+				var variantName = data && data.style.toLowerCase() || 'regular';
+				variantName = variantName.charAt(0).toUpperCase() + variantName.slice(1);
 				font.ot.names.fontFamily.en = data && data.family || 'Prototypo';
-				font.ot.names.fontSubfamily.en = data && data.style || 'regular';
+				font.ot.names.fontSubfamily.en = variantName;
+				font.ot.names.preferredFamily = font.ot.names.fontFamily;
+				font.ot.names.preferredSubfamily = font.ot.names.fontSubFamily;
+				font.ot.names.postScriptName.en = font.ot.names.fontFamily.en + '-' + font.ot.names.fontSubfamily.en;
+				font.ot.names.uniqueID = {
+					en:'Prototypo: ' + font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en + ':2016',
+				}
 				font.ot.names.fullName.en = font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en; 
+				font.ot.names.version.en = 'Version 1.0';
 	
 				var result = font.toArrayBuffer();
 	
-				font.ot.familyName = family;
-				font.ot.styleName = style;
+				font.ot.names.fontFamily.en = family;
+				font.ot.names.fontSubfamily.en = style;
 				font.ot.names.fullName.en = fullName;
 	
 				return result;
