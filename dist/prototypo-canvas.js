@@ -118,7 +118,7 @@ return /******/ (function(modules) { // webpackBootstrap
 				} else if ( e.data instanceof ArrayBuffer ) {
 					try {
 						this.font.addToFonts( e.data );
-						// this.emitEvent( 'worker.' + name );
+						this.emitEvent( 'worker.fontLoaded');
 	
 					} catch ( error ) {
 						this.emitEvent( 'fonterror', [ error ] );
@@ -257,7 +257,15 @@ return /******/ (function(modules) { // webpackBootstrap
 	];
 	
 	PrototypoCanvas.prototype.enqueue = function( message ) {
-		this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ] = message;
+		if (this._queue[PrototypoCanvas.priorities.indexOf( message.type )] === undefined) {
+			this._queue[PrototypoCanvas.priorities.indexOf( message.type )] = []; 
+		}
+		if ( message.serialized ) {
+			this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ].push(message);
+		}
+		else {
+			this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ][0] = message;
+		}
 		this.dequeue();
 	};
 	
@@ -268,8 +276,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// send the highest priority mesage in the queue (0 is lowest)
 		for ( var i = this._queue.length; i--; ) {
-			if ( this._queue[i] ) {
-				this.currentJob = this._queue[i];
+			if ( this._queue[i] && this._queue[i].length > 0 ) {
+				this.currentJob = this._queue[i].shift();
 	
 				// the callback function shouldn't be sent
 				var cb = this.currentJob.callback;
@@ -278,7 +286,6 @@ return /******/ (function(modules) { // webpackBootstrap
 				this.worker.postMessage( this.currentJob );
 	
 				this.currentJob.callback = cb;
-				this._queue[i] = null;
 				break;
 			}
 		}
@@ -356,14 +363,14 @@ return /******/ (function(modules) { // webpackBootstrap
 					if ( cb ) {
 						cb();
 					}
-				}, name, merged, values );
+				}, name, merged, values, true);
 			} catch ( err ) {
 				reject(err);
 			}
 		}.bind(this));
 	};
 	
-	PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values) {
+	PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values, serialized) {
 		if ( !this.worker || ( !this.latestValues && !values ) ) {
 			// the UI should wait for the first update to happen before allowing
 			// the download button to be clicked
@@ -382,7 +389,8 @@ return /******/ (function(modules) { // webpackBootstrap
 				if ( cb ) {
 					cb(data);
 				}
-			}
+			},
+			serialized: serialized
 		});
 	};
 	
@@ -1411,19 +1419,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 				font.updateOTCommands( allChars, data && data.merged || false );
 	
-				var family = font.ot.familyName;
-				var style = font.ot.styleName;
+				var family = font.ot.names.fontFamily.en;
+				var style = font.ot.names.fontSubfamily.en;
+				var fullName = font.ot.names.fullName.en;
 	
 				//TODO: understand why we need to save the familyName and
 				//and set them back into the font.ot for it to be able to
 				//export multiple font
-				font.ot.familyName = data && data.family || 'Prototypo';
-				font.ot.styleName = data && data.style || 'regular';
+				font.ot.names.fontFamily.en = data && data.family || 'Prototypo';
+				font.ot.names.fontSubfamily.en = data && data.style || 'regular';
+				font.ot.names.fullName.en = font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en; 
 	
 				var result = font.toArrayBuffer();
 	
 				font.ot.familyName = family;
 				font.ot.styleName = style;
+				font.ot.names.fullName.en = fullName;
 	
 				return result;
 			};
