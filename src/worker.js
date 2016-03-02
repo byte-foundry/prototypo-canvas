@@ -132,6 +132,114 @@ function prepareWorker() {
 			return font.toArrayBuffer();
 		};
 
+
+		function fillOs2Values(fontOt, values) {
+			var weightChooser = [
+				{
+					test: 20,
+					value: fontOt.usWeightClasses.THIN,
+				},
+				{
+					test: 40,
+					value: fontOt.usWeightClasses.EXTRA_LIGHT,
+				},
+				{
+					test: 60,
+					value: fontOt.usWeightClasses.LIGHT,
+				},
+				{
+					test: 90,
+					value: fontOt.usWeightClasses.NORMAL,
+				},
+				{
+					test: 110,
+					value: fontOt.usWeightClasses.MEDIUM,
+				},
+				{
+					test: 130,
+					value: fontOt.usWeightClasses.SEMI_BOLD,
+				},
+				{
+					test: 150,
+					value: fontOt.usWeightClasses.BOLD,
+				},
+				{
+					test: 170,
+					value: fontOt.usWeightClasses.EXTRA_BOLD,
+				},
+				{
+					test: 190,
+					value: fontOt.usWeightClasses.BLACK,
+				},
+			];
+
+			var widthChooser = [
+				{
+					test: 0.5,
+					value: fontOt.usWidthClasses.ULTRA_CONDENSED,
+				},
+				{
+					test: 0.625,
+					value: fontOt.usWidthClasses.EXTRA_CONDENSED,
+				},
+				{
+					test: 0.75,
+					value: fontOt.usWidthClasses.CONDENSED,
+				},
+				{
+					test: 0.875,
+					value: fontOt.usWidthClasses.SEMI_CONDENSED,
+				},
+				{
+					test: 1,
+					value: fontOt.usWidthClasses.MEDIUM,
+				},
+				{
+					test: 1.125,
+					value: fontOt.usWidthClasses.SEMI_EXPANDED,
+				},
+				{
+					test: 1.25,
+					value: fontOt.usWidthClasses.EXPANDED,
+				},
+				{
+					test: 1.50,
+					value: fontOt.usWidthClasses.EXTRA_EXPANDED,
+				},
+				{
+					test: 2,
+					value: fontOt.usWidthClasses.ULTRA_CONDENSED,
+				},
+			]
+
+			weightChooser.forEach(function(weightObj) {
+				if (values.thickness > weightObj.test) {
+					fontOt.os2Values.weightClass = weightObj.value;
+				}
+			});
+
+			widthChooser.forEach(function(widthObj) {
+				if (values.thickness > widthObj.test) {
+					fontOt.os2Values.widthClass = widthObj.value;
+				}
+			});
+			
+			var fsSel = 0;
+			if (values.slant > 0 ) {
+				fsSel = fsSel | fontOt.fsSelectionValues.ITALIC;
+			}
+
+			if (fontOt.os2Values.weightClass > fontOt.usWeightClasses.NORMAL) {
+				fsSel = fsSel | fontOt.fsSelectionValues.BOLD;
+			}
+
+			if (fsSel === 0) {
+				fsSel = fontOt.fsSelectionValues.REGULAR;
+			}
+
+			fontOt.os2Values.fsSelection = fsSel;
+		}
+
 		handlers.otfFont = function(data) {
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
@@ -159,6 +267,7 @@ function prepareWorker() {
 			}
 			font.ot.names.fullName.en = font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en; 
 			font.ot.names.version.en = 'Version 1.0';
+			fillOs2Values(font.ot, fontValues);
 
 			var result = font.toArrayBuffer();
 
