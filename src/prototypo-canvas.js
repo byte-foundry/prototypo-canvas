@@ -194,15 +194,19 @@ PrototypoCanvas.priorities = [
 ];
 
 PrototypoCanvas.prototype.enqueue = function( message ) {
-	if (this._queue[PrototypoCanvas.priorities.indexOf( message.type )] === undefined) {
-		this._queue[PrototypoCanvas.priorities.indexOf( message.type )] = []; 
+	var priority = PrototypoCanvas.priorities.indexOf( message.type );
+
+	if (this._queue[ priority ] === undefined) {
+		this._queue[ priority ] = [];
 	}
+
 	if ( message.serialized ) {
-		this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ].push(message);
+		this._queue[ priority ].push(message);
 	}
 	else {
-		this._queue[ PrototypoCanvas.priorities.indexOf( message.type ) ][0] = message;
+		this._queue[ priority ][0] = message;
 	}
+
 	this.dequeue();
 };
 
@@ -250,7 +254,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 	if ( !glyphName ) {
 		Object.keys(unicode).forEach(function(code) {
 
-			if (parseInt(code) === this.currGlyph.src.unicode) {
+			if ( +code === this.currGlyph.src.unicode ) {
 				this.displayChar( this.font.glyphMap[unicode[code]] );
 			}
 
