@@ -202,8 +202,8 @@ PrototypoCanvas.prototype.enqueue = function( message ) {
 
 	if ( message.serialized ) {
 		this._queue[ priority ].push(message);
-	}
-	else {
+
+	} else {
 		this._queue[ priority ][0] = message;
 	}
 
@@ -311,29 +311,30 @@ PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
 	}.bind(this));
 };
 
-PrototypoCanvas.prototype.generateOtf = function(cb, name, merged, values, serialized) {
-	if ( !this.worker || ( !this.latestValues && !values ) ) {
-		// the UI should wait for the first update to happen before allowing
-		// the download button to be clicked
-		return false;
-	}
+PrototypoCanvas.prototype.generateOtf =
+	function( cb, name, merged, values, serialized ) {
+		if ( !this.worker || ( !this.latestValues && !values ) ) {
+			// the UI should wait for the first update to happen before allowing
+			// the download button to be clicked
+			return false;
+		}
 
-	this.enqueue({
-		type: 'otfFont',
-		data: {
-			family: name && name.family,
-			style: name && name.style,
-			merged: merged,
-			values: values
-		},
-		callback: function( data ) {
-			if ( cb ) {
-				cb(data);
-			}
-		},
-		serialized: serialized
-	});
-};
+		this.enqueue({
+			type: 'otfFont',
+			data: {
+				family: name && name.family,
+				style: name && name.style,
+				merged: merged,
+				values: values
+			},
+			callback: function( data ) {
+				if ( cb ) {
+					cb(data);
+				}
+			},
+			serialized: serialized
+		});
+	};
 
 PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 	if ( !this.worker || !this.latestValues ) {

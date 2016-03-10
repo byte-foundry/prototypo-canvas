@@ -132,7 +132,6 @@ function prepareWorker() {
 			return font.toArrayBuffer();
 		};
 
-
 		function fillOs2Values(fontOt, values) {
 			var weightChooser = [
 				{ test: 20,		value: 'THIN' },
@@ -143,7 +142,7 @@ function prepareWorker() {
 				{ test: 130,	value: 'SEMI_BOLD' },
 				{ test: 150,	value: 'BOLD' },
 				{ test: 170,	value: 'EXTRA_BOLD' },
-				{ test: 190,	value: 'BLACK' },
+				{ test: 190,	value: 'BLACK' }
 			];
 
 			var widthChooser = [
@@ -155,12 +154,12 @@ function prepareWorker() {
 				{ test: 1.125,	value: 'SEMI_EXPANDED' },
 				{ test: 1.25,	value: 'EXPANDED' },
 				{ test: 1.50,	value: 'EXTRA_EXPANDED' },
-				{ test: 2,		value: 'ULTRA_CONDENSED' },
+				{ test: 2,		value: 'ULTRA_CONDENSED' }
 			]
 
 			weightChooser.forEach(function(weightObj) {
 				if ( values.thickness > weightObj.test ) {
-					fontOt.os2Values.weightClass = (
+					fontOt.tables.os2.weightClass = (
 						fontOt.usWeightClasses[ weightObj.value ]
 					);
 				}
@@ -168,7 +167,7 @@ function prepareWorker() {
 
 			widthChooser.forEach(function(widthObj) {
 				if ( values.width > widthObj.test ) {
-					fontOt.os2Values.widthClass = (
+					fontOt.tables.os2.widthClass = (
 						fontOt.usWidthClasses[ widthObj.value ]
 					);
 				}
@@ -179,7 +178,7 @@ function prepareWorker() {
 				fsSel = fsSel | fontOt.fsSelectionValues.ITALIC;
 			}
 
-			if (fontOt.os2Values.weightClass > fontOt.usWeightClasses.NORMAL) {
+			if (fontOt.tables.os2.weightClass > fontOt.usWeightClasses.NORMAL) {
 				fsSel = fsSel | fontOt.fsSelectionValues.BOLD;
 			}
 
@@ -187,7 +186,7 @@ function prepareWorker() {
 				fsSel = fontOt.fsSelectionValues.REGULAR;
 			}
 
-			fontOt.os2Values.fsSelection = fsSel;
+			fontOt.tables.os2.fsSelection = fsSel;
 		}
 
 		handlers.otfFont = function(data) {
@@ -201,29 +200,39 @@ function prepareWorker() {
 			var family = font.ot.names.fontFamily.en;
 			var style = font.ot.names.fontSubfamily.en;
 			var fullName = font.ot.names.fullName.en;
+			var names = font.ot.names;
 
 			//TODO: understand why we need to save the familyName and
 			//and set them back into the font.ot for it to be able to
 			//export multiple font
 			var variantName = data && data.style.toLowerCase() || 'regular';
-			variantName = variantName.charAt(0).toUpperCase() + variantName.slice(1);
-			font.ot.names.fontFamily.en = data && data.family || 'Prototypo';
-			font.ot.names.fontSubfamily.en = variantName;
-			font.ot.names.preferredFamily = font.ot.names.fontFamily;
-			font.ot.names.preferredSubfamily = font.ot.names.fontSubFamily;
-			font.ot.names.postScriptName.en = font.ot.names.fontFamily.en + '-' + font.ot.names.fontSubfamily.en;
-			font.ot.names.uniqueID = {
-				en:'Prototypo: ' + font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en + ':2016',
-			}
-			font.ot.names.fullName.en = font.ot.names.fontFamily.en + ' ' + font.ot.names.fontSubfamily.en;
-			font.ot.names.version.en = 'Version 1.0';
+			variantName =
+				variantName.charAt(0).toUpperCase() + variantName.slice(1);
+			names.fontFamily.en = data && data.family || 'Prototypo';
+			names.fontSubfamily.en = variantName;
+			names.preferredFamily = names.fontFamily;
+			names.preferredSubfamily = names.fontSubFamily;
+			names.postScriptName.en =
+				names.fontFamily.en + '-' + names.fontSubfamily.en;
+			names.uniqueID = {
+				en: (
+					'Prototypo: ' +
+					names.fontFamily.en +
+					' ' +
+					names.fontSubfamily.en +
+					':2016'
+				)
+			};
+			names.fullName.en =
+				names.fontFamily.en + ' ' + names.fontSubfamily.en;
+			names.version.en = 'Version 1.0';
 			fillOs2Values(font.ot, fontValues);
 
 			var result = font.toArrayBuffer();
 
-			font.ot.names.fontFamily.en = family;
-			font.ot.names.fontSubfamily.en = style;
-			font.ot.names.fullName.en = fullName;
+			names.fontFamily.en = family;
+			names.fontSubfamily.en = style;
+			names.fullName.en = fullName;
 
 			return result;
 		};
