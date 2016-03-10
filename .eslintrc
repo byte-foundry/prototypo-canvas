@@ -5,8 +5,8 @@
 		"node": true,
 		"amd": true,
 		"mocha": true,
-        "es6": true,
-        worker: true
+		"es6": true,
+		"worker": true
 	},
 	"plugins": [
 		"mocha"
@@ -17,11 +17,11 @@
 		"mocha/no-exclusive-tests": 2,
 		"comma-dangle": 0
 	},
-    "globals": {
+	"globals": {
 		"prototypo": false,
 		"FileReaderSync": false,
 		"performance": false,
-        "PrototypoCanvas": false,
-        "expect": false
+		"PrototypoCanvas": false,
+		"expect": false
 	}
 }

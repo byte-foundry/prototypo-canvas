@@ -1,4 +1,5 @@
-var prototypo = window.prototypo,
+var $ = jQuery,
+	prototypo = window.prototypo,
 	paper = prototypo.paper,
 	values = {
 		xHeight: 500,
