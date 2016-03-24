@@ -284,9 +284,9 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 };
 
 PrototypoCanvas.prototype.download =
-	function( cb, name, merged, values, username ) {
+	function( cb, name, merged, values ) {
 		this.generateOtf(function( data ) {
-			this.font.download( data, merged, name, username );
+			this.font.download( data, name );
 			if ( cb ) {
 				cb();
 			}

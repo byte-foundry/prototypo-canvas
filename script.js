@@ -87,6 +87,9 @@ window.PrototypoCanvas.init({
 	$('#export').on('click', function() {
 		instance.download();
 	});
+	$('#exportm').on('click', function() {
+		instance.download( false, undefined, true );
+	});
 	$('#exportv').on('click', function() {
 		values.slant = 0;
 		instance.download(function() {

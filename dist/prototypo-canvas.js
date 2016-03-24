@@ -347,9 +347,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 	
 	PrototypoCanvas.prototype.download =
-		function( cb, name, merged, values, username ) {
+		function( cb, name, merged, values ) {
 			this.generateOtf(function( data ) {
-				this.font.download( data, merged, name, username );
+				this.font.download( data, name );
 				if ( cb ) {
 					cb();
 				}
@@ -1489,24 +1489,22 @@ return /******/ (function(modules) { // webpackBootstrap
 				//TODO: understand why we need to save the familyName and
 				//and set them back into the font.ot for it to be able to
 				//export multiple font
-				var variantName = data && data.style.toLowerCase() || 'regular';
-				variantName =
-					variantName.charAt(0).toUpperCase() + variantName.slice(1);
+				var variantName =
+					( data && data.style ? data.style.toLowerCase() : 'regular' )
+					.replace(/^./, function(a) { return a.toUpperCase(); });
 				names.fontFamily.en = data && data.family || 'Prototypo';
 				names.fontSubfamily.en = variantName;
 				names.preferredFamily = names.fontFamily;
 				names.preferredSubfamily = names.fontSubFamily;
 				names.postScriptName.en =
 					names.fontFamily.en + '-' + names.fontSubfamily.en;
-				names.uniqueID = {
-					en: (
-						'Prototypo: ' +
-						names.fontFamily.en +
-						' ' +
-						names.fontSubfamily.en +
-						':2016'
-					)
-				};
+				names.uniqueID = { en: (
+					'Prototypo: ' +
+					names.fontFamily.en +
+					' ' +
+					names.fontSubfamily.en +
+					':2016'
+				) };
 				names.fullName.en =
 					names.fontFamily.en + ' ' + names.fontSubfamily.en;
 				names.version.en = 'Version 1.0';
