@@ -239,6 +239,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	_.assign( paper.settings, {
 		handleSize: 6,
 		handleColor: '#FF725E',
+		skeletonColor: '#FF2BCA',
 		nodeColor: '#00C4D6',
 		drawCoords: false,
 		handleFont: '12px monospace'
@@ -1027,7 +1028,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	
 		this.currGlyph.contours.forEach(function(contour) {
-			contour.fullySelected = this._showNodes && !contour.skeleton;
+			contour.fullySelected = this._showNodes;
 		}, this);
 	
 		if ( this.currGlyph.components.length ) {
@@ -1057,8 +1058,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			pY;
 	
 		function drawHandle(j) {
-			var hX = Math.round( viewCoords[j] ),
-				hY = Math.round( viewCoords[j + 1] ),
+			var hX = Math.round( viewCoords[j] ) * window.devicePixelRatio,
+				hY = Math.round( viewCoords[j + 1] ) * window.devicePixelRatio,
 				text;
 	
 			if ( viewCoords[0] !== viewCoords[j] ||
@@ -1104,9 +1105,9 @@ return /******/ (function(modules) { // webpackBootstrap
 			var segment = segments[i];
 			segment._transformCoordinates(null, worldCoords, false);
 			segment._transformCoordinates(matrix, viewCoords, false);
-			var state = segment._selectionState;
-			pX = Math.round( viewCoords[0] );
-			pY = Math.round( viewCoords[1] );
+			var state = segment._selection;
+			pX = Math.round( viewCoords[0] ) * window.devicePixelRatio;
+			pY = Math.round( viewCoords[1] ) * window.devicePixelRatio;
 			if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
 				drawHandle(2);
 			}
@@ -1135,6 +1136,50 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	}
 	
+	function drawSkeletons(ctx, segments, matrix, settings, zoom) {
+		function drawRibs(point) {
+		}
+	
+		function drawBones(start, end, width) {
+			var sX = Math.round( start[0] ) * window.devicePixelRatio,
+				sY = Math.round( start[1] ) * window.devicePixelRatio,
+				eX = Math.round( end[0] ) * window.devicePixelRatio,
+				eY = Math.round( end[1] ) * window.devicePixelRatio;
+			ctx.beginPath();
+			ctx.strokeStyle = settings.skeletonColor;
+			ctx.lineWidth = width;
+			ctx.moveTo(sX, sY);
+			ctx.lineTo(eX, eY);
+			ctx.stroke();
+		}
+	
+		for (var i = 0, l = segments.length; i < l; i++) {
+			var segment = segments[i];
+			var state = segment._selection;
+			var boneStartCoords = new Float32Array(6);
+			segment._transformCoordinates(matrix, boneStartCoords, false);
+	
+			if (segments.length > i+1) {
+				var end = segments[i+1];
+				var boneEndCoords = new Float32Array(6);
+				end._transformCoordinates(matrix, boneEndCoords, false);
+				drawBones(boneStartCoords, boneEndCoords, 2);
+			}
+	
+			if (segment.expandedTo && segment.expandedTo.length > 0) {
+				var firstRib = segment.expandedTo[0];
+				var secondRib = segment.expandedTo[1];
+				var ribFirstCoords = new Float32Array(6);
+				var ribSecondCoords = new Float32Array(6);
+				firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+				secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+				drawBones(boneStartCoords, ribFirstCoords, 1);
+				drawBones(boneStartCoords, ribSecondCoords, 1);
+			}
+		}
+		ctx.lineWidth = 1;
+	}
+	
 	function _drawSelected( ctx, matrix ) {
 		ctx.beginPath();
 		// Now stroke it and draw its handles:
@@ -1146,6 +1191,15 @@ return /******/ (function(modules) { // webpackBootstrap
 			this._project._scope.settings,
 			this._project._view._zoom
 		);
+		if (this.skeleton) {
+			drawSkeletons(
+				ctx,
+				this._segments,
+				matrix,
+				this._project._scope.settings,
+				this._project._view._zoom
+			);
+		}
 	}
 	
 	module.exports = {
@@ -1197,7 +1251,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		this.prevPos = currPos;
 	
 		this.view.center = this.view.center.subtract(
-				delta.divide( this.view.zoom ) );
+				delta.divide( this.view.zoom * window.devicePixelRatio) );
 	}
 	
 	function downHandler(event) {

@@ -37,7 +37,7 @@ function moveHandler(event) {
 	this.prevPos = currPos;
 
 	this.view.center = this.view.center.subtract(
-			delta.divide( this.view.zoom ) );
+			delta.divide( this.view.zoom * window.devicePixelRatio) );
 }
 
 function downHandler(event) {
