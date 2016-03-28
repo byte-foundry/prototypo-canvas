@@ -42,7 +42,7 @@ function PrototypoCanvas( opts ) {
 
 	// bind workerHandlers
 	if ( this.worker ) {
-		this.worker.addEventListener('message', function(e) {
+		this.worker.port.addEventListener('message', function(e) {
 			// the job might have been cancelled
 			if ( !this.currentJob ) {
 				return;
@@ -225,7 +225,7 @@ PrototypoCanvas.prototype.dequeue = function() {
 			var cb = this.currentJob.callback;
 			delete this.currentJob.callback;
 
-			this.worker.postMessage( this.currentJob );
+			this.worker.port.postMessage( this.currentJob );
 
 			this.currentJob.callback = cb;
 			break;

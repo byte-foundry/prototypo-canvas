@@ -23,18 +23,20 @@ module.exports = function init( opts ) {
 
 	// create the worker
 	return new Promise(function( resolve ) {
-		var worker = opts.worker = new Worker( opts.workerUrl ),
+		var worker = opts.worker = new SharedWorker( opts.workerUrl , 'yoyo'),
 			handler = function initWorker() {
-				worker.removeEventListener('message', handler);
+				worker.port.removeEventListener('message', handler);
 				resolve();
 			};
+		window.worker = worker;
 
-		worker.addEventListener('message', handler);
-		worker.postMessage( Array.isArray( opts.workerDeps ) ?
+		worker.port.onmessage = handler;
+		worker.port.start();
+
+		worker.port.postMessage( Array.isArray( opts.workerDeps ) ?
 			opts.workerDeps :
 			[ opts.workerDeps ]
 		);
-
 	}).then(function() {
 		return new constructor( opts );
 	});

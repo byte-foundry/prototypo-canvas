@@ -1,4 +1,4 @@
-function prepareWorker() {
+function prepareWorker(self) {
 	function runWorker() {
 		var font,
 			handlers = {},
@@ -249,9 +249,19 @@ function prepareWorker() {
 	}
 }
 
+debugger;
+onconnect = function(e) {
+	debugger;
+	var port = e.ports[0];
+
+	prepareWorker(port);
+
+	port.start();
+};
+
 // When the worker is loaded from URL, worker() needs to be called explicitely
-if ( typeof global === 'undefined' && 'importScripts' in self ) {
-	prepareWorker();
-} else {
-	module.exports = prepareWorker;
-}
+//if ( typeof global === 'undefined' && 'importScripts' in self ) {
+//	prepareWorker();
+//} else {
+//	module.exports = prepareWorker;
+//}
