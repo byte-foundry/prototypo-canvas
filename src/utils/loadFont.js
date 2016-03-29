@@ -21,7 +21,7 @@ module.exports = function loadFont( name, fontSource ) {
 	if ( name in this.fontsMap ) {
 		this.font = this.fontsMap[name];
 		translateGlyph( this );
-		this.worker.postMessage({
+		this.worker.port.postMessage({
 			type: 'font',
 			name: name
 		});
@@ -47,7 +47,7 @@ module.exports = function loadFont( name, fontSource ) {
 					if ( typeof e.data !== 'object' ) {
 						return;
 					}
-					this.worker.removeEventListener('message', handler);
+					this.worker.port.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
 					Object.keys( e.data ).forEach(function(key) {
@@ -63,9 +63,9 @@ module.exports = function loadFont( name, fontSource ) {
 					resolve( this );
 				}.bind(this);
 
-			this.worker.addEventListener('message', handler);
+			this.worker.port.addEventListener('message', handler);
 
-			this.worker.postMessage({
+			this.worker.port.postMessage({
 				type: 'font',
 				name: name,
 				data: fontSource

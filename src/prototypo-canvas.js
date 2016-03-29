@@ -44,11 +44,7 @@ function PrototypoCanvas( opts ) {
 	if ( this.worker ) {
 		this.worker.port.addEventListener('message', function(e) {
 			// the job might have been cancelled
-			if ( !this.currentJob ) {
-				return;
-			}
-
-			if ( this.currentJob.callback ) {
+			if ( this.currentJob && this.currentJob.callback ) {
 				this.currentJob.callback( e.data );
 
 			// default callback for buffers: use it as a font
@@ -62,9 +58,10 @@ function PrototypoCanvas( opts ) {
 				}
 			}
 
-			this.currentJob = false;
-			this.dequeue();
-
+			if ( this.currentJob ) {
+				this.dequeue();
+				this.currentJob = false;
+			}
 		}.bind(this));
 	}
 

@@ -1,3 +1,4 @@
+var ports = [];
 function prepareWorker(self) {
 	function runWorker() {
 		var font,
@@ -23,7 +24,7 @@ function prepareWorker(self) {
 		});
 
 		// mini router
-		self.onmessage = function(e) {
+		self.addEventListener('message', function(e) {
 			var result;
 
 			if ( e.data.type && e.data.type in handlers ) {
@@ -33,11 +34,13 @@ function prepareWorker(self) {
 					return;
 				}
 
-				self.postMessage(
-					result,
-					result instanceof ArrayBuffer ? [ result ] : undefined );
+				ports.forEach(function(port) {
+					port.postMessage(
+						result
+					);
+				});
 			}
-		};
+		});
 
 		handlers.font = function( fontSource, name ) {
 			// TODO: this should be done using a memoizing table of limited size
@@ -237,10 +240,10 @@ function prepareWorker(self) {
 	}
 
 	// This is how bundle dependencies are loaded
-	if ( typeof global === 'undefined' && 'importScripts' in self ) {
+	if ( typeof global === 'undefined' && importScripts ) {
 		var handler = function initWorker( e ) {
 				self.removeEventListener('message', handler);
-				self.importScripts( e.data );
+				importScripts( e.data );
 				runWorker();
 				self.postMessage('ready');
 			};
@@ -249,11 +252,9 @@ function prepareWorker(self) {
 	}
 }
 
-debugger;
 onconnect = function(e) {
-	debugger;
 	var port = e.ports[0];
-
+	ports.push(port);
 	prepareWorker(port);
 
 	port.start();
