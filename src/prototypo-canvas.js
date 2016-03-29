@@ -176,7 +176,7 @@ paper.PaperScope.prototype.Path.prototype._drawSelected = glyph._drawSelected;
 _.assign( paper.settings, {
 	handleSize: 6,
 	handleColor: '#FF725E',
-	skeletonColor: '#FF2BCA',
+	skeletonColor: '#24D390',
 	nodeColor: '#00C4D6',
 	drawCoords: false,
 	handleFont: '12px monospace'

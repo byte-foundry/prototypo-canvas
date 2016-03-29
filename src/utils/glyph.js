@@ -159,9 +159,6 @@ function drawHandles(ctx, segments, matrix, settings, zoom) {
 }
 
 function drawSkeletons(ctx, segments, matrix, settings, zoom) {
-	function drawRibs(point) {
-	}
-
 	function drawBones(start, end, width) {
 		var sX = Math.round( start[0] ) * window.devicePixelRatio,
 			sY = Math.round( start[1] ) * window.devicePixelRatio,
