@@ -1,4 +1,6 @@
-var ports = [];
+var ports = [],
+	exportPorts = [];
+
 function prepareWorker(self) {
 	function runWorker() {
 		var font,
@@ -6,6 +8,7 @@ function prepareWorker(self) {
 			fontsMap = {},
 			currValues,
 			currSubset = [],
+			currName,
 			translateSubset = function() {
 				if ( !currSubset.length ) {
 					return;
@@ -39,11 +42,18 @@ function prepareWorker(self) {
 						result
 					);
 				});
+
+				exportPorts.forEach(function(port) {
+					port.postMessage(
+						[result, currName]
+					);
+				});
 			}
 		});
 
 		handlers.font = function( fontSource, name ) {
 			// TODO: this should be done using a memoizing table of limited size
+			currName = name;
 			if ( name in fontsMap ) {
 				font = fontsMap[name];
 				translateSubset();
@@ -243,7 +253,12 @@ function prepareWorker(self) {
 	if ( typeof global === 'undefined' && importScripts ) {
 		var handler = function initWorker( e ) {
 				self.removeEventListener('message', handler);
-				importScripts( e.data );
+				importScripts( e.data.deps );
+				if ( e.data.exportPort ) {
+					exportPorts.push(self);
+				} else {
+					ports.push(self);
+				}
 				runWorker();
 				self.postMessage('ready');
 			};
@@ -254,7 +269,6 @@ function prepareWorker(self) {
 
 onconnect = function(e) {
 	var port = e.ports[0];
-	ports.push(port);
 	prepareWorker(port);
 
 	port.start();

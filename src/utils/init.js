@@ -33,10 +33,14 @@ module.exports = function init( opts ) {
 		worker.port.onmessage = handler;
 		worker.port.start();
 
-		worker.port.postMessage( Array.isArray( opts.workerDeps ) ?
-			opts.workerDeps :
-			[ opts.workerDeps ]
-		);
+		var data = {
+			exportPort: opts.export || false,
+			deps: Array.isArray( opts.workerDeps ) ?
+				opts.workerDeps :
+				[ opts.workerDeps ]
+		};
+
+		worker.port.postMessage( data );
 	}).then(function() {
 		return new constructor( opts );
 	});
