@@ -285,13 +285,13 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 };
 
 PrototypoCanvas.prototype.download =
-	function( cb, name, merged, values ) {
+	function( cb, name, merged, values, user) {
 		this.generateOtf(function( data ) {
-			this.font.download( data, name );
+			this.font.download( data, merged, name, user );
 			if ( cb ) {
 				cb();
 			}
-		}.bind(this), name, merged, values);
+		}.bind(this), name, false, values);
 	};
 
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
