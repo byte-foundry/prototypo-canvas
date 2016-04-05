@@ -1,6 +1,6 @@
 {
   "name": "prototypo-canvas",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "Prototypo canvas-rendering component",
   "author": "Louis-Rémi <lrbabe@gmail.com>",
   "license": "MIT",
@@ -65,7 +65,7 @@
     "mocha-phantomjs": "^4.0.2",
     "test.ptf": "byte-foundry/test.ptf",
     "venus.ptf": "byte-foundry/venus.ptf",
-	"elzevir.ptf": "byte-foundry/elzevir.ptf",
+    "elzevir.ptf": "byte-foundry/elzevir.ptf",
     "webpack": "^1.12.14"
   }
 }
