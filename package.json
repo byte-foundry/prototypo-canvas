@@ -65,6 +65,7 @@
     "mocha-phantomjs": "^4.0.2",
     "test.ptf": "byte-foundry/test.ptf",
     "venus.ptf": "byte-foundry/venus.ptf",
+	"elzevir.ptf": "byte-foundry/elzevir.ptf",
     "webpack": "^1.12.14"
   }
 }

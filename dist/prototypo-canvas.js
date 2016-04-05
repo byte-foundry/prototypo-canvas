@@ -239,7 +239,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	_.assign( paper.settings, {
 		handleSize: 6,
 		handleColor: '#FF725E',
-		skeletonColor: '#FF2BCA',
+		skeletonColor: '#24D390',
 		nodeColor: '#00C4D6',
 		drawCoords: false,
 		handleFont: '12px monospace'
@@ -348,13 +348,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 	
 	PrototypoCanvas.prototype.download =
-		function( cb, name, merged, values ) {
+		function( cb, name, merged, values, user) {
 			this.generateOtf(function( data ) {
-				this.font.download( data, name );
+				this.font.download( data, merged, name, user );
 				if ( cb ) {
 					cb();
 				}
-			}.bind(this), name, merged, values);
+			}.bind(this), name, false, values);
 		};
 	
 	PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
@@ -1137,9 +1137,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 	
 	function drawSkeletons(ctx, segments, matrix, settings, zoom) {
-		function drawRibs(point) {
-		}
-	
 		function drawBones(start, end, width) {
 			var sX = Math.round( start[0] ) * window.devicePixelRatio,
 				sY = Math.round( start[1] ) * window.devicePixelRatio,

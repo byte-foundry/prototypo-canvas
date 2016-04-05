@@ -113,24 +113,20 @@ window.PrototypoCanvas.init({
 	$('#coords').on('change', function( event ) {
 		instance.showCoords = $(event.target).is(':checked');
 	});
-	$('#load-venus').on('click', function() {
+	var fontsMap = {
+		'venus': 'Prototypo Grotesk',
+		'john-fell': 'Prototypo John Fell',
+		'elzevir': 'Prototypo Elzevir'
+	};
+	$('#load-font').on('change', function() {
+		var val = this.value;
 		instance.loadFont(
-			'grotesk', 'node_modules/venus.ptf/dist/font.json'
+			val, 'node_modules/' + val + '.ptf/dist/font.json'
 		).then(function() {
 			instance.update( values );
-			$('#sample')[0].style.fontFamily = '"Prototypo Grotesk"';
+			$('#sample')[0].style.fontFamily = '"' + fontsMap[val] + '"';
 		});
 	});
-	$('#load-john').on('click', function() {
-		instance.loadFont(
-			'john-fell', 'node_modules/john-fell.ptf/dist/font.json'
-		).then(function() {
-			instance.update( values );
-			$('#sample')[0].style.fontFamily = '"Prototypo John Fell"';
-		});
-
-	});
-
 	var $perfs = $('#perfs'),
 		frameRequest,
 		workerProfile;
