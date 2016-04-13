@@ -105,7 +105,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// bind workerHandlers
 		if ( this.worker ) {
-			this.worker.addEventListener('message', function(e) {
+			this.worker.port.addEventListener('message', function(e) {
 				// the job might have been cancelled
 				if ( !this.currentJob ) {
 					return;
@@ -288,7 +288,7 @@ return /******/ (function(modules) { // webpackBootstrap
 				var cb = this.currentJob.callback;
 				delete this.currentJob.callback;
 	
-				this.worker.postMessage( this.currentJob );
+				this.worker.port.postMessage( this.currentJob );
 	
 				this.currentJob.callback = cb;
 				break;
@@ -1212,27 +1212,28 @@ return /******/ (function(modules) { // webpackBootstrap
 	var paper = __webpack_require__(2).paper;
 	
 	function wheelHandler( event ) {
-		var bcr = this.canvas.getBoundingClientRect(),
-			currPos = new paper.Point(
-				event.clientX - bcr.left,
-				event.clientY - bcr.top
-			),
-			viewPos = this.view.viewToProject( currPos ),
-			// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
-			factor = 1 + ( this.opts.zoomFactor *
+		// normalize the deltaY value. Expected values are ~40 pixels or 3 lines
+		var factor = 1 + ( this.opts.zoomFactor *
 				( Math.abs( event.deltaY / event.deltaMode ? 3 : 40 * 20 ) ) ),
 			newZoom =
 				event.deltaY < 0 ?
 					this.view.zoom * factor :
 					event.deltaY > 0 ?
 						this.view.zoom / factor :
-						this.view.zoom,
-			beta = this.view.zoom / newZoom,
-			difference = viewPos.subtract( this.view.center ),
-			newCenter = viewPos.subtract( difference.multiply(beta) );
+						this.view.zoom;
+			
 	
-		this.zoom = newZoom;
-		this.view.center = newCenter;
+		if ( newZoom > 0.07 ) {
+			var mousePosition = new paper.Point( event.offsetX, event.offsetY );
+			var viewPosition = this.view.viewToProject( mousePosition );
+			var pc = viewPosition.subtract( this.view.center );
+			var newPosition = viewPosition.subtract(
+				pc.multiply( this.view.zoom / newZoom )
+			).subtract( this.view.center );
+	
+			this.zoom = newZoom;
+			this.view.center = this.view.center.add(newPosition);
+		}
 	
 		event.preventDefault();
 	}
@@ -1311,18 +1312,24 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// create the worker
 		return new Promise(function( resolve ) {
-			var worker = opts.worker = new Worker( opts.workerUrl ),
+			var worker = opts.worker = new SharedWorker( opts.workerUrl , 'yoyo'),
 				handler = function initWorker() {
-					worker.removeEventListener('message', handler);
+					worker.port.removeEventListener('message', handler);
 					resolve();
 				};
+			window.worker = worker;
 	
-			worker.addEventListener('message', handler);
-			worker.postMessage( Array.isArray( opts.workerDeps ) ?
-				opts.workerDeps :
-				[ opts.workerDeps ]
-			);
+			worker.port.onmessage = handler;
+			worker.port.start();
 	
+			var data = {
+				exportPort: opts.export || false,
+				deps: Array.isArray( opts.workerDeps ) ?
+					opts.workerDeps :
+					[ opts.workerDeps ]
+			};
+	
+			worker.port.postMessage( data );
 		}).then(function() {
 			return new constructor( opts );
 		});
@@ -1333,13 +1340,18 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 8 */
 /***/ function(module, exports) {
 
-	/* WEBPACK VAR INJECTION */(function(global) {function prepareWorker() {
+	/* WEBPACK VAR INJECTION */(function(global) {var ports = [],
+		exportPorts = [],
+		font,
+		currValues,
+		currName,
+		currSubset = [],
+		arrayBufferMap = {};
+	
+	function prepareWorker(self) {
 		function runWorker() {
-			var font,
-				handlers = {},
+			var handlers = {},
 				fontsMap = {},
-				currValues,
-				currSubset = [],
 				translateSubset = function() {
 					if ( !currSubset.length ) {
 						return;
@@ -1358,26 +1370,50 @@ return /******/ (function(modules) { // webpackBootstrap
 			});
 	
 			// mini router
-			self.onmessage = function(e) {
+			self.addEventListener('message', function(e) {
 				var result;
 	
 				if ( e.data.type && e.data.type in handlers ) {
-					result = handlers[ e.data.type ]( e.data.data, e.data.name );
+					result = handlers[ e.data.type ]( e.data );
 	
 					if ( result === null ) {
 						return;
 					}
 	
-					self.postMessage(
-						result,
-						result instanceof ArrayBuffer ? [ result ] : undefined );
-				}
-			};
+					arrayBufferMap[currName] = result;
 	
-			handlers.font = function( fontSource, name ) {
+					ports.forEach(function(port) {
+						port.postMessage(
+							result
+						);
+					});
+	
+					exportPorts.forEach(function(port) {
+						port.postMessage(
+							[ result, currName ]
+						);
+					});
+				}
+			});
+	
+			handlers.fontData = function( eData) {
+				var name = eData.name;
+	
+				self.postMessage(
+					[ arrayBufferMap[name], name ]
+				);
+				return null;
+			}
+	
+			handlers.font = function( eData ) {
+				var fontSource = eData.data,
+					templateName = eData.name,
+					name = eData.db;
+	
 				// TODO: this should be done using a memoizing table of limited size
-				if ( name in fontsMap ) {
-					font = fontsMap[name];
+				currName = name;
+				if ( templateName in fontsMap ) {
+					font = fontsMap[templateName];
 					translateSubset();
 					return null;
 				}
@@ -1385,7 +1421,7 @@ return /******/ (function(modules) { // webpackBootstrap
 				var fontObj = JSON.parse( fontSource );
 	
 				font = prototypo.parametricFont(fontObj);
-				fontsMap[name] = font;
+				fontsMap[templateName] = font;
 	
 				translateSubset();
 	
@@ -1397,7 +1433,9 @@ return /******/ (function(modules) { // webpackBootstrap
 				return solvingOrders;
 			};
 	
-			handlers.update = function( params ) {
+			handlers.update = function( eData ) {
+				var params = eData.data;
+	
 				currValues = params;
 				font.update( currValues );
 				font.updateOTCommands();
@@ -1406,6 +1444,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			};
 	
 			handlers.soloAlternate = function( params ) {
+	
 				font.setAlternateFor( params.unicode, params.glyphName );
 	
 				if (!currValues) {
@@ -1427,7 +1466,9 @@ return /******/ (function(modules) { // webpackBootstrap
 				return font.toArrayBuffer();
 			};
 	
-			handlers.alternate = function( params ) {
+			handlers.alternate = function( eData ) {
+				var params = eData.data;
+	
 				if ( params.altList ) {
 					Object.keys( params.altList ).forEach(function( unicode ) {
 						handlers.soloAlternate({
@@ -1440,11 +1481,21 @@ return /******/ (function(modules) { // webpackBootstrap
 				}
 			};
 	
-			handlers.subset = function( set ) {
+			handlers.subset = function( eData ) {
+				var set = eData.data,
+					add = eData.add;
+	
 				var prevGlyphs = currSubset.map(function( glyph ) {
 					return glyph.name;
 				});
-				font.subset = set;
+				if ( add ) {
+					var currentStringSubset = font.subset.map(function( glyph ) {
+						return String.fromCharCode(glyph.ot.unicode);
+					}).join('');
+					font.subset = currentStringSubset + set;
+				} else {
+					font.subset = set;
+				}
 				currSubset = font.subset;
 	
 				if ( !currValues ) {
@@ -1524,7 +1575,8 @@ return /******/ (function(modules) { // webpackBootstrap
 				fontOt.tables.os2.fsSelection = fsSel;
 			}
 	
-			handlers.otfFont = function(data) {
+			handlers.otfFont = function( eData ) {
+				var data = eData.data;
 				// force-update of the whole font, ignoring the current subset
 				var allChars = font.getGlyphSubset( false );
 				var fontValues = data && data.values || currValues;
@@ -1572,10 +1624,15 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	
 		// This is how bundle dependencies are loaded
-		if ( typeof global === 'undefined' && 'importScripts' in self ) {
+		if ( typeof global === 'undefined' && importScripts ) {
 			var handler = function initWorker( e ) {
 					self.removeEventListener('message', handler);
-					self.importScripts( e.data );
+					importScripts( e.data.deps );
+					if ( e.data.exportPort ) {
+						exportPorts.push(self);
+					} else {
+						ports.push(self);
+					}
 					runWorker();
 					self.postMessage('ready');
 				};
@@ -1584,12 +1641,19 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	}
 	
+	onconnect = function(e) {
+		var port = e.ports[0];
+		prepareWorker(port);
+	
+		port.start();
+	};
+	
 	// When the worker is loaded from URL, worker() needs to be called explicitely
-	if ( typeof global === 'undefined' && 'importScripts' in self ) {
-		prepareWorker();
-	} else {
-		module.exports = prepareWorker;
-	}
+	//if ( typeof global === 'undefined' && 'importScripts' in self ) {
+	//	prepareWorker();
+	//} else {
+	//	module.exports = prepareWorker;
+	//}
 	
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
@@ -1611,7 +1675,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		);
 	}
 	
-	module.exports = function loadFont( name, fontSource ) {
+	module.exports = function loadFont( name, fontSource, db ) {
 		// ignore the job currently running, empty the queue and clear update values
 		this.emptyQueue();
 		this.latestValues = this.latestRafValues = null;
@@ -1620,9 +1684,10 @@ return /******/ (function(modules) { // webpackBootstrap
 		if ( name in this.fontsMap ) {
 			this.font = this.fontsMap[name];
 			translateGlyph( this );
-			this.worker.postMessage({
+			this.worker.port.postMessage({
 				type: 'font',
-				name: name
+				name: name,
+				db: db
 			});
 			return Promise.resolve( this.font );
 		}
@@ -1646,7 +1711,7 @@ return /******/ (function(modules) { // webpackBootstrap
 						if ( typeof e.data !== 'object' ) {
 							return;
 						}
-						this.worker.removeEventListener('message', handler);
+						this.worker.port.removeEventListener('message', handler);
 	
 						// merge solvingOrders with the source
 						Object.keys( e.data ).forEach(function(key) {
@@ -1662,11 +1727,12 @@ return /******/ (function(modules) { // webpackBootstrap
 						resolve( this );
 					}.bind(this);
 	
-				this.worker.addEventListener('message', handler);
+				this.worker.port.addEventListener('message', handler);
 	
-				this.worker.postMessage({
+				this.worker.port.postMessage({
 					type: 'font',
 					name: name,
+					db: db,
 					data: fontSource
 				});
 	

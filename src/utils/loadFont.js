@@ -12,7 +12,7 @@ function translateGlyph( self ) {
 	);
 }
 
-module.exports = function loadFont( name, fontSource ) {
+module.exports = function loadFont( name, fontSource, db ) {
 	// ignore the job currently running, empty the queue and clear update values
 	this.emptyQueue();
 	this.latestValues = this.latestRafValues = null;
@@ -23,7 +23,8 @@ module.exports = function loadFont( name, fontSource ) {
 		translateGlyph( this );
 		this.worker.port.postMessage({
 			type: 'font',
-			name: name
+			name: name,
+			db: db
 		});
 		return Promise.resolve( this.font );
 	}
@@ -68,6 +69,7 @@ module.exports = function loadFont( name, fontSource ) {
 			this.worker.port.postMessage({
 				type: 'font',
 				name: name,
+				db: db,
 				data: fontSource
 			});
 

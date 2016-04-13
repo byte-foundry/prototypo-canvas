@@ -23,7 +23,7 @@ module.exports = function init( opts ) {
 
 	// create the worker
 	return new Promise(function( resolve ) {
-		var worker = opts.worker = new SharedWorker( opts.workerUrl , 'yoyo'),
+		var worker = opts.worker = new SharedWorker( opts.workerUrl),
 			handler = function initWorker() {
 				worker.port.removeEventListener('message', handler);
 				resolve();

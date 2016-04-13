@@ -1,14 +1,15 @@
 var ports = [],
-	exportPorts = [];
+	exportPorts = [],
+	font,
+	currValues,
+	currName,
+	currSubset = [],
+	arrayBufferMap = {};
 
 function prepareWorker(self) {
 	function runWorker() {
-		var font,
-			handlers = {},
+		var handlers = {},
 			fontsMap = {},
-			currValues,
-			currSubset = [],
-			currName,
 			translateSubset = function() {
 				if ( !currSubset.length ) {
 					return;
@@ -31,11 +32,13 @@ function prepareWorker(self) {
 			var result;
 
 			if ( e.data.type && e.data.type in handlers ) {
-				result = handlers[ e.data.type ]( e.data.data, e.data.name );
+				result = handlers[ e.data.type ]( e.data );
 
 				if ( result === null ) {
 					return;
 				}
+
+				arrayBufferMap[currName] = result;
 
 				ports.forEach(function(port) {
 					port.postMessage(
@@ -45,17 +48,30 @@ function prepareWorker(self) {
 
 				exportPorts.forEach(function(port) {
 					port.postMessage(
-						[result, currName]
+						[ result, currName ]
 					);
 				});
 			}
 		});
 
-		handlers.font = function( fontSource, name ) {
+		handlers.fontData = function( eData) {
+			var name = eData.name;
+
+			self.postMessage(
+				[ arrayBufferMap[name], name ]
+			);
+			return null;
+		}
+
+		handlers.font = function( eData ) {
+			var fontSource = eData.data,
+				templateName = eData.name,
+				name = eData.db;
+
 			// TODO: this should be done using a memoizing table of limited size
 			currName = name;
-			if ( name in fontsMap ) {
-				font = fontsMap[name];
+			if ( templateName in fontsMap ) {
+				font = fontsMap[templateName];
 				translateSubset();
 				return null;
 			}
@@ -63,7 +79,7 @@ function prepareWorker(self) {
 			var fontObj = JSON.parse( fontSource );
 
 			font = prototypo.parametricFont(fontObj);
-			fontsMap[name] = font;
+			fontsMap[templateName] = font;
 
 			translateSubset();
 
@@ -75,7 +91,9 @@ function prepareWorker(self) {
 			return solvingOrders;
 		};
 
-		handlers.update = function( params ) {
+		handlers.update = function( eData ) {
+			var params = eData.data;
+
 			currValues = params;
 			font.update( currValues );
 			font.updateOTCommands();
@@ -84,6 +102,7 @@ function prepareWorker(self) {
 		};
 
 		handlers.soloAlternate = function( params ) {
+
 			font.setAlternateFor( params.unicode, params.glyphName );
 
 			if (!currValues) {
@@ -105,7 +124,9 @@ function prepareWorker(self) {
 			return font.toArrayBuffer();
 		};
 
-		handlers.alternate = function( params ) {
+		handlers.alternate = function( eData ) {
+			var params = eData.data;
+
 			if ( params.altList ) {
 				Object.keys( params.altList ).forEach(function( unicode ) {
 					handlers.soloAlternate({
@@ -118,11 +139,21 @@ function prepareWorker(self) {
 			}
 		};
 
-		handlers.subset = function( set ) {
+		handlers.subset = function( eData ) {
+			var set = eData.data,
+				add = eData.add;
+
 			var prevGlyphs = currSubset.map(function( glyph ) {
 				return glyph.name;
 			});
-			font.subset = set;
+			if ( add ) {
+				var currentStringSubset = font.subset.map(function( glyph ) {
+					return String.fromCharCode(glyph.ot.unicode);
+				}).join('');
+				font.subset = currentStringSubset + set;
+			} else {
+				font.subset = set;
+			}
 			currSubset = font.subset;
 
 			if ( !currValues ) {
@@ -202,7 +233,8 @@ function prepareWorker(self) {
 			fontOt.tables.os2.fsSelection = fsSel;
 		}
 
-		handlers.otfFont = function(data) {
+		handlers.otfFont = function( eData ) {
+			var data = eData.data;
 			// force-update of the whole font, ignoring the current subset
 			var allChars = font.getGlyphSubset( false );
 			var fontValues = data && data.values || currValues;
