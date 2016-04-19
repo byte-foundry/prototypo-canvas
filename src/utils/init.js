@@ -7,6 +7,7 @@ module.exports = function init( opts ) {
 
 	// the worker can be loaded from a file by specifying its url (dev
 	// environment), or by building it as a blob, from a require'd file.
+	console.log(opts.workerUrl);
 	if ( !opts.workerUrl ) {
 		opts.workerUrl = URL.createObjectURL(
 			new Blob([

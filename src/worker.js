@@ -8,6 +8,7 @@ var ports = [],
 	arrayBufferMap = {},
 	worker = self,
 	fontsMap = {},
+	prototypoObj,
 	translateSubset = function() {
 		if ( !currSubset.length ) {
 			return;
@@ -109,7 +110,7 @@ function runSharedWorker(self) {
 function runWorker(self) {
 	var handlers = {};
 
-	prototypo.paper.setup({
+	prototypoObj.paper.setup({
 		width: 1024,
 		height: 1024
 	});
@@ -167,7 +168,7 @@ function runWorker(self) {
 
 		var fontObj = JSON.parse( fontSource );
 
-		font = prototypo.parametricFont(fontObj);
+		font = prototypoObj.parametricFont(fontObj);
 		fontsMap[templateName] = font;
 
 		translateSubset();
@@ -341,7 +342,10 @@ function prepareWorker(self) {
 	if ( typeof global === 'undefined' && importScripts ) {
 		var handler = function initWorker( e ) {
 				self.removeEventListener('message', handler);
-				importScripts( e.data.deps );
+				if (!prototypoObj) {
+					importScripts( e.data.deps );
+					prototypoObj = prototypo;
+				}
 				if ( e.data.exportPort ) {
 					exportPorts.push(self);
 
@@ -377,10 +381,3 @@ onconnect = function(e) {
 
 	port.start();
 };
-
-// When the worker is loaded from URL, worker() needs to be called explicitely
-//if ( typeof global === 'undefined' && 'importScripts' in self ) {
-//	prepareWorker();
-//} else {
-//	module.exports = prepareWorker;
-//}
