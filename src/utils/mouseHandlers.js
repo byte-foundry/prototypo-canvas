@@ -10,10 +10,10 @@ function wheelHandler( event ) {
 				event.deltaY > 0 ?
 					this.view.zoom / factor :
 					this.view.zoom;
-		
+
 
 	if ( newZoom > 0.07 ) {
-		var mousePosition = new paper.Point( event.offsetX, event.offsetY );
+		var mousePosition = new paper.Point( event.offsetX / window.devicePixelRatio, event.offsetY / window.devicePixelRatio );
 		var viewPosition = this.view.viewToProject( mousePosition );
 		var pc = viewPosition.subtract( this.view.center );
 		var newPosition = viewPosition.subtract(
