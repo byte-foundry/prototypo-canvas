@@ -1221,10 +1221,10 @@ return /******/ (function(modules) { // webpackBootstrap
 					event.deltaY > 0 ?
 						this.view.zoom / factor :
 						this.view.zoom;
-			
+	
 	
 		if ( newZoom > 0.07 ) {
-			var mousePosition = new paper.Point( event.offsetX, event.offsetY );
+			var mousePosition = new paper.Point( event.offsetX / window.devicePixelRatio, event.offsetY / window.devicePixelRatio );
 			var viewPosition = this.view.viewToProject( mousePosition );
 			var pc = viewPosition.subtract( this.view.center );
 			var newPosition = viewPosition.subtract(
@@ -1350,6 +1350,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		arrayBufferMap = {},
 		worker = self,
 		fontsMap = {},
+		prototypoObj,
 		translateSubset = function() {
 			if ( !currSubset.length ) {
 				return;
@@ -1451,7 +1452,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	function runWorker(self) {
 		var handlers = {};
 	
-		prototypo.paper.setup({
+		prototypoObj.paper.setup({
 			width: 1024,
 			height: 1024
 		});
@@ -1509,7 +1510,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 			var fontObj = JSON.parse( fontSource );
 	
-			font = prototypo.parametricFont(fontObj);
+			font = prototypoObj.parametricFont(fontObj);
 			fontsMap[templateName] = font;
 	
 			translateSubset();
@@ -1683,7 +1684,10 @@ return /******/ (function(modules) { // webpackBootstrap
 		if ( typeof global === 'undefined' && importScripts ) {
 			var handler = function initWorker( e ) {
 					self.removeEventListener('message', handler);
-					importScripts( e.data.deps );
+					if (!prototypoObj) {
+						importScripts( e.data.deps );
+						prototypoObj = prototypo;
+					}
 					if ( e.data.exportPort ) {
 						exportPorts.push(self);
 	
@@ -1719,13 +1723,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		port.start();
 	};
-	
-	// When the worker is loaded from URL, worker() needs to be called explicitely
-	//if ( typeof global === 'undefined' && 'importScripts' in self ) {
-	//	prepareWorker();
-	//} else {
-	//	module.exports = prepareWorker;
-	//}
 	
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
