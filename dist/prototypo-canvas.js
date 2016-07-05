@@ -400,7 +400,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			});
 		};
 	
-	PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
+	PrototypoCanvas.prototype.openInGlyphr = function( cb, name, merged, values, user ) {
 		if ( !this.worker || !this.latestValues ) {
 			// the UI should wait for the first update to happen before allowing
 			// the download button to be clicked
@@ -424,6 +424,19 @@ return /******/ (function(modules) { // webpackBootstrap
 						cb();
 					}
 				};
+	
+				// font backup
+				this.generateOtf(function( arrayBuffer ) {
+					fetch('http://localhost:3000/' +
+						name.family + '/' +
+						name.style + '/' +
+						user +
+						(name.template ? '/' + name.template : ''), {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/otf' },
+							body: arrayBuffer
+					});
+				}.bind(this), name, false, values);
 	
 				window.open( this.opts.glyphrUrl );
 				window.addEventListener('message', handler);
@@ -1221,10 +1234,10 @@ return /******/ (function(modules) { // webpackBootstrap
 					event.deltaY > 0 ?
 						this.view.zoom / factor :
 						this.view.zoom;
-			
+	
 	
 		if ( newZoom > 0.07 ) {
-			var mousePosition = new paper.Point( event.offsetX, event.offsetY );
+			var mousePosition = new paper.Point( event.offsetX / window.devicePixelRatio, event.offsetY / window.devicePixelRatio );
 			var viewPosition = this.view.viewToProject( mousePosition );
 			var pc = viewPosition.subtract( this.view.center );
 			var newPosition = viewPosition.subtract(
@@ -1296,6 +1309,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// the worker can be loaded from a file by specifying its url (dev
 		// environment), or by building it as a blob, from a require'd file.
+		console.log(opts.workerUrl);
 		if ( !opts.workerUrl ) {
 			opts.workerUrl = URL.createObjectURL(
 				new Blob([
@@ -1350,6 +1364,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		arrayBufferMap = {},
 		worker = self,
 		fontsMap = {},
+		prototypoObj,
 		translateSubset = function() {
 			if ( !currSubset.length ) {
 				return;
@@ -1451,7 +1466,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	function runWorker(self) {
 		var handlers = {};
 	
-		prototypo.paper.setup({
+		prototypoObj.paper.setup({
 			width: 1024,
 			height: 1024
 		});
@@ -1509,7 +1524,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 			var fontObj = JSON.parse( fontSource );
 	
-			font = prototypo.parametricFont(fontObj);
+			font = prototypoObj.parametricFont(fontObj);
 			fontsMap[templateName] = font;
 	
 			translateSubset();
@@ -1683,7 +1698,10 @@ return /******/ (function(modules) { // webpackBootstrap
 		if ( typeof global === 'undefined' && importScripts ) {
 			var handler = function initWorker( e ) {
 					self.removeEventListener('message', handler);
-					importScripts( e.data.deps );
+					if (!prototypoObj) {
+						importScripts( e.data.deps );
+						prototypoObj = prototypo;
+					}
 					if ( e.data.exportPort ) {
 						exportPorts.push(self);
 	
@@ -1719,13 +1737,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		port.start();
 	};
-	
-	// When the worker is loaded from URL, worker() needs to be called explicitely
-	//if ( typeof global === 'undefined' && 'importScripts' in self ) {
-	//	prepareWorker();
-	//} else {
-	//	module.exports = prepareWorker;
-	//}
 	
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
