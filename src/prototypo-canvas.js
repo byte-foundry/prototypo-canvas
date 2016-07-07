@@ -337,7 +337,7 @@ PrototypoCanvas.prototype.generateOtf =
 		});
 	};
 
-PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
+PrototypoCanvas.prototype.openInGlyphr = function( cb, name, merged, values, user ) {
 	if ( !this.worker || !this.latestValues ) {
 		// the UI should wait for the first update to happen before allowing
 		// the download button to be clicked
@@ -361,6 +361,19 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb ) {
 					cb();
 				}
 			};
+
+			// font backup
+			this.generateOtf(function( arrayBuffer ) {
+				fetch('http://localhost:3000/' +
+					name.family + '/' +
+					name.style + '/' +
+					user +
+					(name.template ? '/' + name.template : ''), {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/otf' },
+						body: arrayBuffer
+				});
+			}.bind(this), name, false, values);
 
 			window.open( this.opts.glyphrUrl );
 			window.addEventListener('message', handler);
