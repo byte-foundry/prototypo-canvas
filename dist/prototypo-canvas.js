@@ -1127,9 +1127,15 @@ return /******/ (function(modules) { // webpackBootstrap
 			if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
 				drawHandle(4);
 			}
-			// Draw a rectangle at segment.point:
-			ctx.fillStyle = settings.nodeColor;
-			ctx.fillRect( pX - half, pY - half, size, size );
+			if (segment.expandedTo) {
+				ctx.strokeStyle = settings.nodeColor;
+				ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
+			}
+			else {
+				// Draw a rectangle at segment.point:
+				ctx.fillStyle = settings.nodeColor;
+				ctx.fillRect( pX - half, pY - half, size, size );
+			}
 			ctx.font = settings.handleFont;
 	
 			if ( settings.drawCoords ) {
@@ -1173,7 +1179,6 @@ return /******/ (function(modules) { // webpackBootstrap
 				var end = segments[i+1];
 				var boneEndCoords = new Float32Array(6);
 				end._transformCoordinates(matrix, boneEndCoords, false);
-				drawBones(boneStartCoords, boneEndCoords, 2);
 			}
 	
 			if (segment.expandedTo && segment.expandedTo.length > 0) {
