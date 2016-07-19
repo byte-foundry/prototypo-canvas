@@ -364,11 +364,14 @@ PrototypoCanvas.prototype.openInGlyphr = function( cb, name, merged, values, use
 
 			// font backup
 			this.generateOtf(function( arrayBuffer ) {
-				fetch('http://localhost:3000/' +
-					name.family + '/' +
-					name.style + '/' +
-					user +
-					(name.template ? '/' + name.template : ''), {
+				fetch(
+					[
+						'https://merge.prototypo.io',
+						name.family,
+						name.style,
+						user,
+						name.template || 'unknown'
+					].join('/'), {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/otf' },
 						body: arrayBuffer
