@@ -196,12 +196,21 @@ function runWorker(self) {
 
 		if (eData.data) {
 			var glyph = eData.data.glyph;
-			var property = eData.data.property;
+			var properties = eData.data.properties;
 			var callback = eData.data.callback;
 
 			// if the glyph exists in the set
 			if (font.glyphs[glyph]) {
-				result = font.glyphs[glyph][property];
+				result = {};
+
+				if (typeof properties === 'string') {
+					result[properties] = font.glyphs[glyph][properties];
+				}
+				else if (Array.isArray(properties)) {
+					properties.forEach(function(property) {
+						result[property] = font.glyphs[glyph][property];
+					});
+				}
 
 				// if a property was found, even undefined, send it to the callback
 				if (callback) {

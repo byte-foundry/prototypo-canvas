@@ -252,15 +252,15 @@ PrototypoCanvas.prototype.update = function( values ) {
 	});
 };
 
-PrototypoCanvas.prototype.getGlyphProperty = function(glyph, property, callback) {
-	if (typeof glyph === 'string' && glyph.length > 0 && typeof property === 'string') {
+PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callback) {
+	if (typeof glyph === 'string' && glyph.length > 0){
 		if (glyph.length > 1) {
 			glyph = glyph[0];
 		}
 
 		this.enqueue({
 			type: 'getGlyphProperty',
-			data: {glyph: glyph, property: property},
+			data: {glyph: glyph, properties: properties},
 			callback: (typeof callback === 'function' ? callback : undefined)
 		});
 	}
