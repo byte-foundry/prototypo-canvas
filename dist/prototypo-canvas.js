@@ -254,7 +254,8 @@ return /******/ (function(modules) { // webpackBootstrap
 		'subset',
 		'svgFont',
 		'otfFont',
-		'alternate'
+		'alternate',
+		'getGlyphProperty'
 	];
 	
 	PrototypoCanvas.prototype.enqueue = function( message ) {
@@ -313,6 +314,20 @@ return /******/ (function(modules) { // webpackBootstrap
 			data: values
 		});
 	};
+	
+	PrototypoCanvas.prototype.getGlyphProperty = function(glyph, property, callback) {
+		if (typeof glyph === 'string' && glyph.length > 0 && typeof property === 'string') {
+			if (glyph.length > 1) {
+				glyph = glyph[0];
+			}
+	
+			this.enqueue({
+				type: 'getGlyphProperty',
+				data: {glyph: glyph, property: property},
+				callback: (typeof callback === 'function' ? callback : undefined)
+			});
+		}
+	}
 	
 	PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 		if ( !glyphName ) {
@@ -1551,6 +1566,28 @@ return /******/ (function(modules) { // webpackBootstrap
 			font.update( currValues );
 			font.updateOTCommands();
 			var result = font.toArrayBuffer();
+			return result;
+		};
+	
+		handlers.getGlyphProperty = function(eData) {
+			var result = null;
+	
+			if (eData.data) {
+				var glyph = eData.data.glyph;
+				var property = eData.data.property;
+				var callback = eData.data.callback;
+	
+				// if the glyph exists in the set
+				if (font.glyphs[glyph]) {
+					result = font.glyphs[glyph][property];
+	
+					// if a property was found, even undefined, send it to the callback
+					if (callback) {
+						callback(result);
+					}
+				}
+			}
+	
 			return result;
 		};
 	

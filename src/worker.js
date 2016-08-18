@@ -191,6 +191,28 @@ function runWorker(self) {
 		return result;
 	};
 
+	handlers.getGlyphProperty = function(eData) {
+		var result = null;
+
+		if (eData.data) {
+			var glyph = eData.data.glyph;
+			var property = eData.data.property;
+			var callback = eData.data.callback;
+
+			// if the glyph exists in the set
+			if (font.glyphs[glyph]) {
+				result = font.glyphs[glyph][property];
+
+				// if a property was found, even undefined, send it to the callback
+				if (callback) {
+					callback(result);
+				}
+			}
+		}
+
+		return result;
+	};
+
 	handlers.soloAlternate = function( params ) {
 
 		font.setAlternateFor( params.unicode, params.glyphName );
