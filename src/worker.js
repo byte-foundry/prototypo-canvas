@@ -195,28 +195,22 @@ function runWorker(self) {
 		var result = null;
 
 		if (eData.data) {
-			var glyph = eData.data.glyph;
+			var unicode = eData.data.unicode;
 			var properties = eData.data.properties;
-			var callback = eData.data.callback;
+			result = {};
 
-			// if the glyph exists in the set
-			if (font.glyphs[glyph]) {
-				result = {};
-
-				if (typeof properties === 'string') {
-					result[properties] = font.glyphs[glyph][properties];
+			font.glyphs.forEach(function(glyph) {
+				if (glyph.unicode === unicode) {
+					if (typeof properties === 'string') {
+						result[properties] = glyph[properties];
+					}
+					else if (Array.isArray(properties)) {
+						properties.forEach(function(property) {
+							result[property] = glyph[property];
+						});
+					}
 				}
-				else if (Array.isArray(properties)) {
-					properties.forEach(function(property) {
-						result[property] = font.glyphs[glyph][property];
-					});
-				}
-
-				// if a property was found, even undefined, send it to the callback
-				if (callback) {
-					callback(result);
-				}
-			}
+			});
 		}
 
 		return result;
