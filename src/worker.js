@@ -191,6 +191,31 @@ function runWorker(self) {
 		return result;
 	};
 
+	handlers.getGlyphProperty = function(eData) {
+		var result = null;
+
+		if (eData.data) {
+			var unicode = eData.data.unicode;
+			var properties = eData.data.properties;
+			result = {};
+
+			font.glyphs.forEach(function(glyph) {
+				if (glyph.unicode === unicode) {
+					if (typeof properties === 'string') {
+						result[properties] = glyph[properties];
+					}
+					else if (Array.isArray(properties)) {
+						properties.forEach(function(property) {
+							result[property] = glyph[property];
+						});
+					}
+				}
+			});
+		}
+
+		return result;
+	};
+
 	handlers.soloAlternate = function( params ) {
 
 		font.setAlternateFor( params.unicode, params.glyphName );

@@ -191,7 +191,8 @@ PrototypoCanvas.priorities = [
 	'subset',
 	'svgFont',
 	'otfFont',
-	'alternate'
+	'alternate',
+	'getGlyphProperty'
 ];
 
 PrototypoCanvas.prototype.enqueue = function( message ) {
@@ -250,6 +251,30 @@ PrototypoCanvas.prototype.update = function( values ) {
 		data: values
 	});
 };
+
+PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callback) {
+	var unicode = 0;
+
+	if (typeof glyph === 'string' && glyph.length > 0){
+		if (glyph.length > 1) {
+			glyph = glyph[0];
+		}
+
+		unicode = glyph.charCodeAt(0);
+	}
+	else if (typeof glyph === 'number') {
+		unicode = glyph;
+	}
+
+	this.enqueue({
+		type: 'getGlyphProperty',
+		data: {
+			unicode: unicode,
+			properties: properties
+		},
+		callback: (typeof callback === 'function' ? callback : undefined)
+	});
+}
 
 PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 	if ( !glyphName ) {
