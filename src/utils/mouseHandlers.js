@@ -13,7 +13,7 @@ function wheelHandler( event ) {
 
 
 	if ( newZoom > 0.07 ) {
-		var mousePosition = new paper.Point( event.offsetX / window.devicePixelRatio, event.offsetY / window.devicePixelRatio );
+		var mousePosition = new paper.Point( event.offsetX, event.offsetY);
 		var viewPosition = this.view.viewToProject( mousePosition );
 		var pc = viewPosition.subtract( this.view.center );
 		var newPosition = viewPosition.subtract(
@@ -38,7 +38,7 @@ function moveHandler(event) {
 	this.prevPos = currPos;
 
 	this.view.center = this.view.center.subtract(
-			delta.divide( this.view.zoom * window.devicePixelRatio) );
+			delta.divide( this.view.zoom ) );
 }
 
 function downHandler(event) {

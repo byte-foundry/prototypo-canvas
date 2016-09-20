@@ -5,6 +5,14 @@ function displayComponents( glyph, showNodes ) {
 			contour.fullySelected = showNodes && !contour.skeleton;
 		});
 
+		component.onMouseEnter = function() {
+			component.fillColor = '#23d390';
+		};
+
+		component.onMouseLeave = function() {
+			component.fillColor = '#333333';
+		};
+
 		if ( component.components.length ) {
 			displayComponents( component, showNodes );
 		}
