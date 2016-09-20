@@ -1,3 +1,5 @@
+var paper = prototypo;
+
 function displayComponents( glyph, showNodes ) {
 	glyph.components.forEach(function(component) {
 		component.visible = true;
@@ -29,6 +31,13 @@ function displayGlyph( _glyph ) {
 		this.currGlyph.components.forEach(function(component) {
 			component.visible = false;
 		}, this);
+		this.currGlyph.contours.forEach(({segments}) => {
+			segments.forEach(({directionHandle}) => {
+				if(directionHandle) {
+					directionHandle.visible = false;
+				}
+			})
+		});
 	}
 
 	this.currGlyph = glyph;

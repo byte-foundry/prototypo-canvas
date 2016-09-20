@@ -68,6 +68,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	var mouseHandlers	= __webpack_require__(6);
 	var init			= __webpack_require__(7);
 	var loadFont		= __webpack_require__(9);
+	var drawUIEditor	= __webpack_require__(10).drawUIEditor;
 	
 	var _ = { assign: assign },
 		paper = prototypo.paper;
@@ -100,6 +101,105 @@ return /******/ (function(modules) { // webpackBootstrap
 		this.fontsMap = {};
 		this.isMousedown = false;
 		this.exportingZip = false;
+	
+		var UIEditor = {};
+	
+		var emitEvent = this.emitEvent.bind(this);
+	
+		this.view.onMouseDown = function(event) {
+			// if visible, skeleton points can be matched
+			var skeletons = paper.project.getItems({selected: true}).filter((item) => { return item.skeleton && !item.visible; });
+			skeletons.forEach((item) => { item.visible = true; });
+	
+			var hitResult = paper.project.hitTest(event.point, {
+				match(hit) {
+					return hit.item.skeleton || hit.type.startsWith('handle') || hit.segment.expandedFrom;
+				},
+				segments: true,
+				handles: true,
+				tolerance: 10,
+			});
+	
+			skeletons.forEach((item) => { item.visible = false; });
+	
+			if(hitResult) {
+				if(hitResult.type.startsWith('handle')) {
+					this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
+					this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
+					this.selectedHandleNorm = this.selectedHandle.length;
+					this.selectedHandleAngle = this.selectedHandle.angle;
+				}
+				this.selectedSegment = hitResult.segment;
+				this.selectedSegmentNorm = this.selectedSegment.point.length;
+				this.selectedSegmentAngle = this.selectedSegment.angle;
+	
+				UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
+			}
+		};
+	
+		this.view.onMouseDrag = function(event) {
+			if(this.selectedHandle && this.selectedSegment.expandedFrom) {
+				// change dir
+				var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
+				var mouseVecNorm = transformedEventPoint.subtract(this.selectedSegment).length;
+	
+				var eventNormalized = event.delta.multiply(this.selectedHandleNorm/mouseVecNorm);
+				var newHandlePosition = new paper.Point(
+					this.selectedHandlePos.x + eventNormalized.x,
+					this.selectedHandlePos.y - eventNormalized.y
+				);
+	
+				var normalizedHandle = newHandlePosition.normalize().multiply(this.selectedHandleNorm);
+				this.selectedHandlePos.x = normalizedHandle.x;
+				this.selectedHandlePos.y = normalizedHandle.y;
+				var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
+				this.selectedHandleAngle = normalizedHandle.angle;
+	
+				const { contourIdx, nodeIdx } = this.selectedSegment.expandedFrom;
+				return emitEvent('manualchange', [{
+					[`contours.${contourIdx}.nodes.${nodeIdx}.dirOut`]: successAngle,
+				}]);
+			} else if (this.selectedSegment) {
+				if(this.selectedSegment.path.skeleton) {
+					// change skeleton x, y
+					const { contourIdx, nodeIdx } = this.selectedSegment;
+					emitEvent('manualchange', [{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+					}]);
+				} else {
+					// change angle, width
+	
+					var angle = this.selectedSegment.expandedFrom.expand.angle;
+					var direction = new paper.Point(
+						Math.cos(angle),
+						Math.sin(angle)
+					);
+					var deltaWidth = direction.x * event.delta.x - direction.y * event.delta.y;
+	
+					if(this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
+						deltaWidth *= -1;
+					}
+	
+					const { contourIdx, nodeIdx } = this.selectedSegment.expandedFrom;
+					emitEvent('manualchange', [{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: {
+							// angle: normalizedHandle.angle - this.selectedSegmentAngle,
+							width: deltaWidth,
+						},
+					}]);
+				}
+			}
+		};
+	
+		this.view.onMouseUp = function(event) {
+			this.selectedHandle = null;
+			this.selectedSegment = null;
+	
+			if(UIEditor.selection && UIEditor.selection.toDelete) {
+				delete UIEditor.selection;
+			}
+		};
 	
 		// this.grid = new Grid( paper );
 	
@@ -147,24 +247,24 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	
 		// setup raf loop
-		var raf = window.requestAnimationFrame ||
-				window.webkitRequestAnimationFrame,
-			updateLoop = function() {
-				raf(updateLoop);
+		var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+		var updateLoop = () => {
+			raf(updateLoop);
 	
-				if (
-					!this.latestRafValues ||
-					!this.currGlyph ||
-					this.exportingZip
-				) {
-					return;
-				}
+			if (
+				!this.latestRafValues ||
+				!this.currGlyph ||
+				this.exportingZip
+			) {
+				return;
+			}
 	
-				this.font.update( this.latestRafValues, [ this.currGlyph ] );
-				this.view.update();
-				delete this.latestRafValues;
+			this.font.update( this.latestRafValues, [ this.currGlyph ] );
+			drawUIEditor(paper, UIEditor);
+			this.view.update();
+			delete this.latestRafValues;
 	
-			}.bind(this);
+		};
 		updateLoop();
 	}
 	
@@ -1017,6 +1117,8 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 5 */
 /***/ function(module, exports) {
 
+	var paper = prototypo;
+	
 	function displayComponents( glyph, showNodes ) {
 		glyph.components.forEach(function(component) {
 			component.visible = true;
@@ -1048,6 +1150,13 @@ return /******/ (function(modules) { // webpackBootstrap
 			this.currGlyph.components.forEach(function(component) {
 				component.visible = false;
 			}, this);
+			this.currGlyph.contours.forEach(({segments}) => {
+				segments.forEach(({directionHandle}) => {
+					if(directionHandle) {
+						directionHandle.visible = false;
+					}
+				})
+			});
 		}
 	
 		this.currGlyph = glyph;
@@ -1289,13 +1398,13 @@ return /******/ (function(modules) { // webpackBootstrap
 			return;
 		}
 	
-		var currPos = new paper.Point( event.clientX, event.clientY ),
-			delta = currPos.subtract( this.prevPos );
-	
-		this.prevPos = currPos;
-	
-		this.view.center = this.view.center.subtract(
-				delta.divide( this.view.zoom * window.devicePixelRatio) );
+		// var currPos = new paper.Point( event.clientX, event.clientY ),
+		// 	delta = currPos.subtract( this.prevPos );
+		//
+		// this.prevPos = currPos;
+		//
+		// this.view.center = this.view.center.subtract(
+		// 		delta.divide( this.view.zoom * window.devicePixelRatio) );
 	}
 	
 	function downHandler(event) {
@@ -1822,7 +1931,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// TODO: memoizing should have a limited size!
 		if ( name in this.fontsMap ) {
-			this.font = this.fontsMap[name];
+			this.font = _.deepClone(this.fontsMap[name]);
 			translateGlyph( this );
 			this.worker.port.postMessage({
 				type: 'font',
@@ -1878,6 +1987,43 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 			}.bind(this));
 		}.bind(this));
+	};
+
+
+/***/ },
+/* 10 */
+/***/ function(module, exports) {
+
+	function drawUIEditor(paper, UIEditor) {
+		if(!UIEditor || !UIEditor.selection) {
+			return;
+		}
+	
+		// init
+		var directionHandle = UIEditor.directionHandle || new paper.Shape.Circle(new paper.Point(0,0), 5);
+		UIEditor.directionHandle = directionHandle;
+	
+		directionHandle.radius = 5 / paper.view.zoom;
+		directionHandle.position = new paper.Point(
+			UIEditor.selection.point.x - 20,
+			UIEditor.selection.point.y + 20
+		);
+		directionHandle.strokeColor = 'black';
+		directionHandle.fillColor = 'white';
+		directionHandle.angle = UIEditor.selection.expand.angle * 180 / Math.PI;
+		directionHandle.onMouseDrag = function(event) {
+			console.log(event);
+			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
+			directionHandle.rotate(
+				transformedEventPoint.subtract(UIEditor.selection).angle
+				- (directionHandle.position.subtract(UIEditor.selection)).angle,
+				UIEditor.selection
+			);
+		}
+	}
+	
+	module.exports = {
+		drawUIEditor: drawUIEditor,
 	};
 
 

@@ -27,29 +27,6 @@ function wheelHandler( event ) {
 	event.preventDefault();
 }
 
-function moveHandler(event) {
-	if ( !this.isMousedown ) {
-		return;
-	}
-
-	var currPos = new paper.Point( event.clientX, event.clientY ),
-		delta = currPos.subtract( this.prevPos );
-
-	this.prevPos = currPos;
-
-	this.view.center = this.view.center.subtract(
-			delta.divide( this.view.zoom * window.devicePixelRatio) );
-}
-
-function downHandler(event) {
-	if (event.button && event.button !== 0) {
-		return;
-	}
-
-	this.isMousedown = true;
-	this.prevPos = new paper.Point( event.clientX, event.clientY );
-}
-
 function upHandler() {
 	this.isMousedown = false;
 }
@@ -64,8 +41,6 @@ function zoomOut() {
 
 module.exports = {
 	onWheel: wheelHandler,
-	onMove: moveHandler,
-	onDown: downHandler,
 	onUp: upHandler,
 	zoomIn: zoomIn,
 	zoomOut: zoomOut
