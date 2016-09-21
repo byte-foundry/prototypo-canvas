@@ -1024,13 +1024,13 @@ return /******/ (function(modules) { // webpackBootstrap
 				contour.fullySelected = showNodes && !contour.skeleton;
 			});
 	
-			component.onMouseEnter = function() {
+				/*component.onMouseEnter = function() {
 				component.fillColor = '#23d390';
 			};
 	
 			component.onMouseLeave = function() {
 				component.fillColor = '#333333';
-			};
+			};*/
 	
 			if ( component.components.length ) {
 				displayComponents( component, showNodes );
@@ -1107,8 +1107,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			pY;
 	
 		function drawHandle(j) {
-			var hX = Math.round( viewCoords[j] ) * window.devicePixelRatio,
-				hY = Math.round( viewCoords[j + 1] ) * window.devicePixelRatio,
+			var hX = Math.round( viewCoords[j] ),
+				hY = Math.round( viewCoords[j + 1] ),
 				text;
 	
 			if ( viewCoords[0] !== viewCoords[j] ||
@@ -1155,8 +1155,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			segment._transformCoordinates(null, worldCoords, false);
 			segment._transformCoordinates(matrix, viewCoords, false);
 			var state = segment._selection;
-			pX = Math.round( viewCoords[0] ) * window.devicePixelRatio;
-			pY = Math.round( viewCoords[1] ) * window.devicePixelRatio;
+			pX = Math.round( viewCoords[0] );
+			pY = Math.round( viewCoords[1] );
 			if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
 				drawHandle(2);
 			}
@@ -1193,10 +1193,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	function drawSkeletons(ctx, segments, matrix, settings, zoom) {
 		function drawBones(start, end, width) {
-			var sX = Math.round( start[0] ) * window.devicePixelRatio,
-				sY = Math.round( start[1] ) * window.devicePixelRatio,
-				eX = Math.round( end[0] ) * window.devicePixelRatio,
-				eY = Math.round( end[1] ) * window.devicePixelRatio;
+			var sX = Math.round( start[0] ),
+				sY = Math.round( start[1] ),
+				eX = Math.round( end[0] ),
+				eY = Math.round( end[1] );
 			ctx.beginPath();
 			ctx.strokeStyle = settings.skeletonColor;
 			ctx.lineWidth = width;
