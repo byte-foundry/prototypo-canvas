@@ -144,11 +144,11 @@ function drawHandles(ctx, segments, matrix, settings, zoom) {
 		if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
 			drawHandle(4);
 		}
-		if (segment.expandedTo) {
+		if (segment.expand) {
 			ctx.strokeStyle = settings.nodeColor;
 			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 		}
-		else {
+		else if (!segment.expandedTo){
 			// Draw a rectangle at segment.point:
 			ctx.fillStyle = settings.nodeColor;
 			ctx.fillRect( pX - half, pY - half, size, size );
@@ -192,13 +192,7 @@ function drawSkeletons(ctx, segments, matrix, settings, zoom) {
 		var boneStartCoords = new Float32Array(6);
 		segment._transformCoordinates(matrix, boneStartCoords, false);
 
-		if (segments.length > i+1) {
-			var end = segments[i+1];
-			var boneEndCoords = new Float32Array(6);
-			end._transformCoordinates(matrix, boneEndCoords, false);
-		}
-
-		if (segment.expandedTo && segment.expandedTo.length > 0) {
+		if (segment.expand && segment.expandedTo && segment.expandedTo.length > 0) {
 			var firstRib = segment.expandedTo[0];
 			var secondRib = segment.expandedTo[1];
 			var ribFirstCoords = new Float32Array(6);
@@ -207,6 +201,14 @@ function drawSkeletons(ctx, segments, matrix, settings, zoom) {
 			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
 			drawBones(boneStartCoords, ribFirstCoords, 1);
 			drawBones(boneStartCoords, ribSecondCoords, 1);
+		} else {
+			var firstRib = segment.expandedTo[0];
+			var secondRib = segment.expandedTo[1];
+			var ribFirstCoords = new Float32Array(6);
+			var ribSecondCoords = new Float32Array(6);
+			firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+			drawBones(ribFirstCoords, ribSecondCoords, 1);
 		}
 	}
 	ctx.lineWidth = 1;
