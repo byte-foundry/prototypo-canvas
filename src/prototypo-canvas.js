@@ -43,56 +43,88 @@ function PrototypoCanvas( opts ) {
 
 	var emitEvent = this.emitEvent.bind(this);
 
+	var confirmCursorsChanges = function(cursors) {
+		const createIdentityCursors = function(cursors) {
+			Object.keys(cursors).forEach((key) => {
+				switch (typeof cursors[key]) {
+					case 'number': cursors[key] = 0; break;
+					case 'string': cursors[key] = '0deg'; break;
+					case 'object': cursors[key] = createIdentityCursors(cursors[key]); break;
+				}
+			});
+			return cursors;
+		};
+
+		emitEvent('manualchange', [createIdentityCursors(cursors), true]);
+	};
+
 	var UIEditor = createUIEditor(paper, {
-		onExpandChanged(cursor, deltaExpand) {
-			emitEvent('manualchange', [{
-				[cursor]: deltaExpand,
-			}]);
+		onCursorsChanged(cursors) {
+			emitEvent('manualchange', [cursors]);
+			if(!UIEditor.changesToConfirm) {
+				pCanvasInstance.worker.port.postMessage({
+					type: 'changeCursorsToManual',
+					cursors: Object.keys(cursors),
+					glyphUnicode: pCanvasInstance.currGlyph.ot.unicode,
+				});
+				UIEditor.changesToConfirm = cursors;
+			}
 		},
+		onConfirmChanges() {
+			var cursors = UIEditor.changesToConfirm;
+			confirmCursorsChanges(cursors);
+			delete UIEditor.changesToConfirm;
+		}
 	});
 
 	this.view.onMouseDown = function(event) {
-		// if visible, skeleton points can be matched
-		var skeletons = paper.project.getItems({selected: true}).filter((item) => { return item.skeleton && !item.visible; });
-		skeletons.forEach((item) => { item.visible = true; });
+		if(pCanvasInstance._showNodes) {
+			// if visible, skeleton points can be matched
+			var skeletons = paper.project.getItems({selected: true}).filter((item) => { return item.skeleton && !item.visible; });
+			skeletons.forEach((item) => { item.visible = true; });
 
-		var results = paper.project.hitTestAll(event.point, {
-			match(hit) {
-				return hit.item.skeleton || hit.segment.expandedFrom;
-			},
-			segments: true,
-			handles: true,
-			tolerance: 10,
-		});
-		// matching skeleton first
-		var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
+			var results = paper.project.hitTestAll(event.point, {
+				match(hit) {
+					return hit.item.skeleton || hit.segment.expandedFrom;
+				},
+				segments: true,
+				handles: true,
+				tolerance: (10 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
+			});
+			// matching skeleton first
+			var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
 
-		skeletons.forEach((item) => { item.visible = false; });
+			skeletons.forEach((item) => { item.visible = false; });
 
-		if(hitResult) {
-			if(hitResult.type.startsWith('handle')) {
-				this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
-				this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
-				this.selectedHandleNorm = this.selectedHandle.length;
-				this.selectedHandleAngle = this.selectedHandle.angle;
+			if(hitResult) {
+				if(hitResult.type.startsWith('handle')) {
+					this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
+					this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
+					this.selectedHandleNorm = this.selectedHandle.length;
+					this.selectedHandleAngle = this.selectedHandle.angle;
+				}
+				this.selectedSegment = hitResult.segment;
+				this.skewedSelectedSegmentPoint = new paper.Point(
+					this.selectedSegment.x + (this.selectedSegment.expandedFrom || this.selectedSegment).path.viewMatrix.c / paper.view.zoom  * this.selectedSegment.y,
+					this.selectedSegment.y
+				);
+				this.selectedSegmentNorm = this.skewedSelectedSegmentPoint.length;
+				this.selectedSegmentAngle = this.skewedSelectedSegmentPoint.angle;
+
+				UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
+
+				return;
 			}
-			this.selectedSegment = hitResult.segment;
-			this.selectedSegmentNorm = this.selectedSegment.point.length;
-			this.selectedSegmentAngle = this.selectedSegment.angle;
-
-			UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
-
-			return;
 		}
 
 		pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
 	};
 
 	this.view.onMouseDrag = function(event) {
-		if(this.selectedHandle && this.selectedSegment.expandedFrom) {
+		if(this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
-			var mouseVecNorm = transformedEventPoint.subtract(this.selectedSegment).length;
+			var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
 
 			var eventNormalized = event.delta.multiply(this.selectedHandleNorm/mouseVecNorm);
 			var newHandlePosition = new paper.Point(
@@ -106,20 +138,30 @@ function PrototypoCanvas( opts ) {
 			var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
 			this.selectedHandleAngle = normalizedHandle.angle;
 
-			const { contourIdx, nodeIdx } = this.selectedSegment.expandedFrom;
-			return emitEvent('manualchange', [{
-				[`contours.${contourIdx}.nodes.${nodeIdx}.dirOut`]: successAngle,
-			}]);
-		} else if (this.selectedSegment) {
+			var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
+			var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
+			var dirType = (invertDir && !isDirIn) || (!invertDir && isDirIn) ? 'dirIn' : 'dirOut';
+
+			var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+			var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+			var cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
+			this.changesToConfirm = cursors;
+			return emitEvent('manualchange', [cursors]);
+		}
+		else if (this.selectedSegment && pCanvasInstance._showNodes) {
 			if(this.selectedSegment.path.skeleton) {
 				// change skeleton x, y
-				const { contourIdx, nodeIdx } = this.selectedSegment;
-				emitEvent('manualchange', [{
+				var contourIdx = this.selectedSegment.contourIdx;
+				var nodeIdx = this.selectedSegment.nodeIdx;
+				var cursors = {
 					[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 					[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-				}]);
-			} else {
-				// change angle, width
+				};
+				this.changesToConfirm = cursors;
+				return emitEvent('manualchange', [cursors]);
+			}
+			else {
+				// change width
 
 				var angle = this.selectedSegment.expandedFrom.expand.angle;
 				var direction = new paper.Point(
@@ -132,14 +174,16 @@ function PrototypoCanvas( opts ) {
 					deltaWidth *= -1;
 				}
 
-				const { contourIdx, nodeIdx } = this.selectedSegment.expandedFrom;
-				emitEvent('manualchange', [{
-					[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: {
-						width: deltaWidth,
-					},
-				}]);
+				var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+				var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+				var cursors = {
+					[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: { width: deltaWidth },
+				};
+				this.changesToConfirm = cursors;
+				return emitEvent('manualchange', [cursors]);
 			}
-		} else if(pCanvasInstance.prevPos) {
+		}
+		else if(pCanvasInstance.prevPos) {
 			var currPos = new paper.Point(event.event.clientX, event.event.clientY),
 				delta = currPos.subtract(pCanvasInstance.prevPos);
 
@@ -153,6 +197,10 @@ function PrototypoCanvas( opts ) {
 	};
 
 	this.view.onMouseUp = function(event) {
+		if(this.changesToConfirm) {
+			confirmCursorsChanges(this.changesToConfirm);
+			delete this.changesToConfirm;
+		}
 		this.selectedHandle = null;
 		this.selectedSegment = null;
 	};
@@ -198,7 +246,13 @@ function PrototypoCanvas( opts ) {
 			delete this.latestRafValues;
 		}
 
-		drawUIEditor(paper, UIEditor);
+		drawUIEditor(paper, !this._showNodes, UIEditor);
+
+		if(this.prevGlyph !== this.currGlyph) {
+			this.prevGlyph = this.currGlyph;
+
+			delete UIEditor.selection;
+		}
 	};
 	updateLoop();
 }

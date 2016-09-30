@@ -27,10 +27,6 @@ function wheelHandler( event ) {
 	event.preventDefault();
 }
 
-function upHandler() {
-	this.isMousedown = false;
-}
-
 function zoomIn() {
 	this.zoom = this.view.zoom * 1 + this.opts.zoomFactor;
 }
@@ -41,7 +37,6 @@ function zoomOut() {
 
 module.exports = {
 	onWheel: wheelHandler,
-	onUp: upHandler,
 	zoomIn: zoomIn,
 	zoomOut: zoomOut
 };

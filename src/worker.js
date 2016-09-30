@@ -359,6 +359,13 @@ function runWorker(self) {
 
 		return result;
 	};
+
+	handlers.changeCursorsToManual = function(eData) {
+		var cursors = eData.cursors;
+		var glyphUnicode = eData.glyphUnicode;
+
+		font.changeCursorsToManual(glyphUnicode, cursors);
+	};
 }
 
 function prepareWorker(self) {
