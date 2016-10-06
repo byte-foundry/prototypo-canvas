@@ -1,3 +1,7 @@
+var ComponentMenu = require('../ui/componentMenu');
+var prototypo = require('prototypo.js'),
+	paper = prototypo.paper;
+
 function displayComponents( glyph, showNodes ) {
 	glyph.components.forEach(function(component) {
 		component.visible = true;
@@ -5,18 +9,32 @@ function displayComponents( glyph, showNodes ) {
 			contour.fullySelected = showNodes && !contour.skeleton;
 		});
 
-			/*component.onMouseEnter = function() {
-			component.fillColor = '#23d390';
-		};
+		if (component.choice && Array.isArray(component.choice)) {
+			component.onMouseEnter = function() {
+				component.oldFillColor = component.fillColor;
+				component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
+			};
 
-		component.onMouseLeave = function() {
-			component.fillColor = '#333333';
-		};*/
+			component.onMouseLeave = function() {
+				component.fillColor = component.oldFillColor;
+			};
+
+			component.onClick = function(event) {
+				event.preventDefault();
+				event.stopPropagation();
+				this.displayComponentList(glyph, component.componentId, event.point);
+
+				this.view.onClick = function(event) {
+					glyph.componentMenu.removeMenu();
+					this.view.onClick = undefined;
+				}.bind(this);
+			}.bind(this);
+		}
 
 		if ( component.components.length ) {
-			displayComponents( component, showNodes );
+			this.displayComponents( component, showNodes );
 		}
-	});
+	}.bind(this));
 }
 
 function displayGlyph( _glyph ) {
@@ -50,10 +68,10 @@ function displayGlyph( _glyph ) {
 	this.currGlyph.visible = true;
 
 	if ( this._fill ) {
-		this.currGlyph.fillColor = '#333333';
+		this.currGlyph.fillColor = new paper.Color(0.2, 0.2, 0.2);
 		this.currGlyph.strokeWidth = 0;
 	} else {
-		this.currGlyph.fillColor = null;
+		this.currGlyph.fillColor = new paper.Color(1, 1, 1, 0.01);
 		this.currGlyph.strokeWidth = 1;
 	}
 
@@ -62,7 +80,7 @@ function displayGlyph( _glyph ) {
 	}, this);
 
 	if ( this.currGlyph.components.length ) {
-		displayComponents( this.currGlyph, this._showNodes );
+		this.displayComponents( this.currGlyph, this._showNodes );
 	}
 
 	this.view._project._needsUpdate = true;
@@ -236,7 +254,35 @@ function _drawSelected( ctx, matrix ) {
 	}
 }
 
+function displayComponentList( glyph, componentId, point ) {
+	point.y = -point.y
+	var component = glyph.components.filter(function(element) { return element.componentId === componentId})[0];
+
+	if (component.choice && component.choice.length > 1) {
+		if (glyph.componentMenu) {
+			glyph.componentMenu.removeMenu();
+		}
+
+		var menu = new ComponentMenu({
+			point: component.children[0].bounds.bottomLeft,
+			components: glyph.componentLists[componentId],
+			callback: function(componentName) {
+				this.changeComponent(glyph, componentId, componentName);
+			}.bind(this),
+		});
+
+		glyph.componentMenu = menu;
+	}
+}
+
+ function changeComponent( glyph, componentId, componentName) {
+	 this.emit('component.change', glyph, componentId, componentName);
+}
+
 module.exports = {
 	displayGlyph: displayGlyph,
+	displayComponents: displayComponents,
+	displayComponentList: displayComponentList,
+	changeComponent: changeComponent,
 	_drawSelected: _drawSelected
 };

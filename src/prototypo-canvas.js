@@ -6,6 +6,7 @@ var mouseHandlers	= require('./utils/mouseHandlers');
 var init			= require('./utils/init');
 var loadFont		= require('./utils/loadFont');
 
+
 var _ = { assign: assign },
 	paper = prototypo.paper;
 
@@ -163,6 +164,9 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 });
 
 PrototypoCanvas.prototype.displayGlyph = glyph.displayGlyph;
+PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
+PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
+PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
 
 PrototypoCanvas.prototype.displayChar = function( code ) {
 	this.latestChar = code;
