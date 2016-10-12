@@ -64,9 +64,6 @@ function zoomOut() {
 
 module.exports = {
 	onWheel: wheelHandler,
-	onMove: moveHandler,
-	onDown: downHandler,
-	onUp: upHandler,
 	zoomIn: zoomIn,
 	zoomOut: zoomOut
 };

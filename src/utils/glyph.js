@@ -1,6 +1,5 @@
 var ComponentMenu = require('../ui/componentMenu');
-var prototypo = require('prototypo.js'),
-	paper = prototypo.paper;
+var paper = prototypo;
 
 function displayComponents( glyph, showNodes ) {
 	glyph.components.forEach(function(component) {
@@ -55,6 +54,13 @@ function displayGlyph( _glyph ) {
 		this.currGlyph.components.forEach(function(component) {
 			component.visible = false;
 		}, this);
+		this.currGlyph.contours.forEach(({segments}) => {
+			segments.forEach(({directionHandle}) => {
+				if(directionHandle) {
+					directionHandle.visible = false;
+				}
+			})
+		});
 	}
 
 	this.currGlyph = glyph;
