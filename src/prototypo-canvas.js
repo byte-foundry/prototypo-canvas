@@ -1,5 +1,6 @@
 var prototypo		= require('prototypo.js');
 var assign			= require('es6-object-assign').assign;
+var cloneDeep		= require('lodash/cloneDeep');
 var EventEmitter	= require('wolfy87-eventemitter');
 var glyph			= require('./utils/glyph');
 var mouseHandlers	= require('./utils/mouseHandlers');
@@ -7,7 +8,7 @@ var init			= require('./utils/init');
 var loadFont		= require('./utils/loadFont');
 var {drawUIEditor, createUIEditor} = require('./utils/ui-editor');
 
-var _ = { assign: assign },
+var _ = { assign: assign, cloneDeep: cloneDeep },
 	paper = prototypo.paper;
 
 // constructor
@@ -39,11 +40,27 @@ function PrototypoCanvas( opts ) {
 	this.isMousedown = false;
 	this.exportingZip = false;
 
+	this.typographicFrame = {
+		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
+		spacingRight: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
+		low: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+		xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+		capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+	};
+	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
+	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
+	this.typographicFrame.spacingRight.fillColor = '#f5f5f5';
+	this.typographicFrame.spacingRight.strokeColor = '#24d390';
+	this.typographicFrame.low.fillColor = '#777777';
+	this.typographicFrame.xHeight.fillColor = '#777777';
+	this.typographicFrame.capHeight.fillColor = '#777777';
+
 	var pCanvasInstance = this;
 
 	var emitEvent = this.emitEvent.bind(this);
 
-	var confirmCursorsChanges = function(cursors) {
+	var confirmCursorsChanges = function(oldCursors) {
+		const newCursors = _.cloneDeep(oldCursors);
 		const createIdentityCursors = function(cursors) {
 			Object.keys(cursors).forEach((key) => {
 				switch (typeof cursors[key]) {
@@ -55,20 +72,15 @@ function PrototypoCanvas( opts ) {
 			return cursors;
 		};
 
-		emitEvent('manualchange', [createIdentityCursors(cursors), true]);
+		emitEvent('manualchange', [createIdentityCursors(newCursors), true]);
 	};
 
 	var UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
 			emitEvent('manualchange', [cursors]);
-			if(!UIEditor.changesToConfirm) {
-				pCanvasInstance.worker.port.postMessage({
-					type: 'changeCursorsToManual',
-					cursors: Object.keys(cursors),
-					glyphUnicode: pCanvasInstance.currGlyph.ot.unicode,
-				});
-				UIEditor.changesToConfirm = cursors;
-			}
+		if(!UIEditor.changesToConfirm) {
+			UIEditor.changesToConfirm = cursors;
+		}
 		},
 		onConfirmChanges() {
 			var cursors = UIEditor.changesToConfirm;
@@ -121,6 +133,7 @@ function PrototypoCanvas( opts ) {
 	};
 
 	this.view.onMouseDrag = function(event) {
+		console.log(event.delta);
 		if(this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
@@ -163,15 +176,26 @@ function PrototypoCanvas( opts ) {
 			else {
 				// change width
 
+				if (this.selectedSegment.expandedFrom.skeletonBaseWidth === undefined) {
+					this.selectedSegment.expandedFrom.skeletonBaseWidth = this.selectedSegment.expandedFrom.expand.width;
+				}
 				var angle = this.selectedSegment.expandedFrom.expand.angle;
+				var distrib = this.selectedSegment.expandedFrom.expand.distr;
+				var baseWidth = this.selectedSegment.expandedFrom.skeletonBaseWidth;
 				var direction = new paper.Point(
 					Math.cos(angle),
 					Math.sin(angle)
 				);
-				var deltaWidth = direction.x * event.delta.x - direction.y * event.delta.y;
+				var deltaWidth = (direction.x * event.delta.x - direction.y * event.delta.y) / baseWidth;
 
 				if(this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
 					deltaWidth *= -1;
+					if (distrib !== 0) {
+						deltaWidth /= distrib;
+					}
+				}
+				else if (distrib !== 1) {
+					deltaWidth /= (1 - distrib);
 				}
 
 				var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
@@ -243,6 +267,7 @@ function PrototypoCanvas( opts ) {
 		if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
 			this.font.update( this.latestRafValues, [ this.currGlyph ] );
 			this.view.update();
+			drawTypographicFrame.bind(this)();
 			delete this.latestRafValues;
 		}
 
@@ -255,6 +280,15 @@ function PrototypoCanvas( opts ) {
 		}
 	};
 	updateLoop();
+}
+
+function drawTypographicFrame() {
+	if (this.currGlyph) {
+		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
+		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
+		this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+		this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+	}
 }
 
 PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
