@@ -78,14 +78,17 @@ function PrototypoCanvas( opts ) {
 	var UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
 			emitEvent('manualchange', [cursors]);
-		if(!UIEditor.changesToConfirm) {
-			UIEditor.changesToConfirm = cursors;
-		}
+			if(!UIEditor.changesToConfirm) {
+				UIEditor.changesToConfirm = cursors;
+			}
 		},
 		onConfirmChanges() {
 			var cursors = UIEditor.changesToConfirm;
 			confirmCursorsChanges(cursors);
 			delete UIEditor.changesToConfirm;
+		},
+		onResetCursor(contourId, nodeId) {
+			emitEvent('manualreset', [contourId, nodeId]);
 		}
 	});
 
@@ -133,7 +136,6 @@ function PrototypoCanvas( opts ) {
 	};
 
 	this.view.onMouseDrag = function(event) {
-		console.log(event.delta);
 		if(this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
@@ -275,6 +277,9 @@ function PrototypoCanvas( opts ) {
 
 		if(this.prevGlyph !== this.currGlyph) {
 			this.prevGlyph = this.currGlyph;
+			if (!(this.latestRafValues && this.currGlyph && !this.exportingZip)) {
+				drawTypographicFrame.bind(this)();
+			}
 
 			delete UIEditor.selection;
 		}
@@ -286,8 +291,10 @@ function drawTypographicFrame() {
 	if (this.currGlyph) {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
-		this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
-		this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+		if(this.latestRafValues) {
+			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+		}
 	}
 }
 

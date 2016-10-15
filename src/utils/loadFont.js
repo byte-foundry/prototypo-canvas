@@ -1,3 +1,5 @@
+var cloneDeep		= require('lodash/cloneDeep');
+var _ = { cloneDeep: cloneDeep };
 // switch the current glyph with one that has the same name
 // in the next font, or one with the same unicode, or .undef
 function translateGlyph( self ) {
@@ -19,7 +21,7 @@ module.exports = function loadFont( name, fontSource, db ) {
 
 	// TODO: memoizing should have a limited size!
 	if ( name in this.fontsMap ) {
-		this.font = _.deepClone(this.fontsMap[name]);
+		this.font = this.fontsMap[name];
 		translateGlyph( this );
 		this.worker.port.postMessage({
 			type: 'font',

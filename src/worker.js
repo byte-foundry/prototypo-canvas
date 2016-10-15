@@ -412,4 +412,10 @@ onconnect = function(e) {
 	prepareWorker(port);
 
 	port.start();
+	port.onerror = function(e) {
+		console.log('values : ', currValues);
+		console.log('font : ', font);
+
+		throw new Error(e);
+	};
 };
