@@ -8,26 +8,67 @@ function displayComponents( glyph, showNodes ) {
 			contour.fullySelected = showNodes && !contour.skeleton;
 		});
 
-		if (component.choice && Array.isArray(component.choice)) {
-			component.onMouseEnter = function() {
-				component.oldFillColor = component.fillColor;
-				component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
-			};
+		if (component.multiple) {
+			if (component.name.indexOf('none') !== -1) {
+				if (!component.optionPoint) {
+					var point = new paper.Shape.Circle({
+						center: component.anchors[0].anchor,
+						radius: 10 / this.view.zoom,
+						strokeWidth: 1 / this.view.zoom,
+						fillColor: new paper.Color(1, 1, 1, 0.01),
+						strokeColor: undefined,
+					});
 
-			component.onMouseLeave = function() {
-				component.fillColor = component.oldFillColor;
-			};
+					var oldDraw = point.draw;
+					point.draw = function() {
+						point.radius = 10 / this.view.zoom;
+						point.strokeWidth = 1 / this.view.zoom,
+						oldDraw.apply(point, arguments);
+					}.bind(this);
 
-			component.onClick = function(event) {
-				event.preventDefault();
-				event.stopPropagation();
-				this.displayComponentList(glyph, component.componentId, event.point);
+					point.onMouseEnter = function() {
+						point.strokeColor = "#24d390";
+					}
 
-				this.view.onClick = function(event) {
-					glyph.componentMenu.removeMenu();
-					this.view.onClick = undefined;
+					point.onMouseLeave = function() {
+						point.strokeColor = undefined;
+					}
+
+					point.onClick = function(event) {
+						event.preventDefault();
+						event.stopPropagation();
+						this.displayComponentList(glyph, component.componentId, event.point);
+
+						this.view.onClick = function(event) {
+							glyph.componentMenu.removeMenu();
+							this.view.onClick = undefined;
+						}.bind(this);
+					}.bind(this);
+
+					component.optionPoint = point;
+				}
+			}
+			else {
+				component.onMouseEnter = function() {
+					component.oldFillColor = component.fillColor;
+					component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
+				};
+
+				component.onMouseLeave = function() {
+					component.fillColor = component.oldFillColor;
+				};
+
+				component.onClick = function(event) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.displayComponentList(glyph, component.componentId, event.point);
+
+					this.view.onClick = function(event) {
+						glyph.componentMenu.removeMenu();
+						this.view.onClick = undefined;
+					}.bind(this);
 				}.bind(this);
-			}.bind(this);
+			}
 		}
 
 		if ( component.components.length ) {
@@ -264,7 +305,7 @@ function displayComponentList( glyph, componentId, point ) {
 	point.y = -point.y
 	var component = glyph.components.filter(function(element) { return element.componentId === componentId})[0];
 
-	if (component.choice && component.choice.length > 1) {
+	if (component.multiple) {
 		if (glyph.componentMenu) {
 			glyph.componentMenu.removeMenu();
 		}
