@@ -27,14 +27,49 @@ function displayComponents( glyph, showNodes ) {
 					}.bind(this);
 
 					point.onMouseEnter = function() {
-						point.strokeColor = "#24d390";
-					}
+						if (!this._showNodes) {
+							point.strokeColor = "#24d390";
+						}
+					}.bind(this);
 
 					point.onMouseLeave = function() {
-						point.strokeColor = undefined;
-					}
+						if (!this._showNodes) {
+							point.strokeColor = undefined;
+						}
+					}.bind(this);
 
 					point.onClick = function(event) {
+						if (!this._showNodes) {
+							event.preventDefault();
+							event.stopPropagation();
+							this.displayComponentList(glyph, component.componentId, event.point);
+
+							this.view.onClick = function(event) {
+								glyph.componentMenu.removeMenu();
+								this.view.onClick = undefined;
+							}.bind(this);
+						}
+					}.bind(this);
+
+					component.optionPoint = point;
+				}
+			}
+			else {
+				component.onMouseEnter = function() {
+					if (!this._showNodes) {
+						component.oldFillColor = component.fillColor;
+						component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
+					}
+				}.bind(this);
+
+				component.onMouseLeave = function() {
+					if (!this._showNodes) {
+						component.fillColor = component.oldFillColor;
+					}
+				}.bind(this);
+
+				component.onClick = function(event) {
+					if (!this._showNodes) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.displayComponentList(glyph, component.componentId, event.point);
@@ -43,30 +78,7 @@ function displayComponents( glyph, showNodes ) {
 							glyph.componentMenu.removeMenu();
 							this.view.onClick = undefined;
 						}.bind(this);
-					}.bind(this);
-
-					component.optionPoint = point;
-				}
-			}
-			else {
-				component.onMouseEnter = function() {
-					component.oldFillColor = component.fillColor;
-					component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
-				};
-
-				component.onMouseLeave = function() {
-					component.fillColor = component.oldFillColor;
-				};
-
-				component.onClick = function(event) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.displayComponentList(glyph, component.componentId, event.point);
-
-					this.view.onClick = function(event) {
-						glyph.componentMenu.removeMenu();
-						this.view.onClick = undefined;
-					}.bind(this);
+					}
 				}.bind(this);
 			}
 		}

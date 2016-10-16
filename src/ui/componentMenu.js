@@ -9,64 +9,31 @@ var animationAngleRotation = 180;
 var componentItemHeight = 40;
 var componentItemMargin = 3;
 var componentItemPadding = 12;
+var componentListMargin = {
+	x: 12,
+	y: 5,
+};
 
 function ComponentMenu( args ) {
 	paper.Group.prototype.constructor.apply( this );
 
 	this.pivot = new paper.Point(0, 0);
-	this.matrix.d = -1;
 	this.position = new paper.Point(0,0);
 	this.componentList = args.components;
-	this.anchorPoint = args.point;
 	this.componentItems = [];
 	this.itemGroup = new paper.Group();
 	this.pointArg = args.point;
 	this.callback = args.callback;
 
-	var circle = new paper.Shape.Circle(new paper.Point(0, 0), 16.4);
-	circle.fillColor = blackColor;
-	circle.matrix.ty = args.point.y;
-	circle.matrix.tx = args.point.x;
-	circle.matrix.a = 1 / this.view.zoom;
-	circle.matrix.d = 1 / this.view.zoom;
-	this.circle = circle;
-	this.addChild(circle);
+	var factorGen = new EaseInTimer(animationFrameLength);
 
-	var icon = new paper.CompoundPath('M27.1,16.1l-1.6-0.2c0-1.1-0.3-2.1-0.7-3.1l1.3-1c0.1-0.1,0.1-0.2,0.2-0.3 c0-0.1,0-0.2-0.1-0.3l-1.8-2.4c-0.1-0.1-0.2-0.1-0.3-0.2c-0.1,0-0.2,0-0.3,0.1l-1.2,0.9c-0.8-0.7-1.7-1.3-2.8-1.8L20,6.3 c0-0.1,0-0.2-0.1-0.3c-0.1-0.1-0.2-0.1-0.3-0.2l-3-0.4c-0.1,0-0.2,0-0.3,0.1c-0.1,0.1-0.1,0.2-0.2,0.3l-0.2,1.5 c-1.1,0-2.2,0.3-3.2,0.7l-0.9-1.2c-0.1-0.2-0.4-0.2-0.6-0.1L8.8,8.5C8.7,8.6,8.6,8.7,8.6,8.8c0,0.1,0,0.2,0.1,0.3l0.9,1.2 C8.8,11.1,8.2,12,7.8,13l-1.5-0.2c-0.1,0-0.2,0-0.3,0.1c-0.1,0.1-0.1,0.2-0.2,0.3l-0.4,3c0,0.2,0.1,0.4,0.3,0.5l1.5,0.2 C7.3,18,7.6,19.1,8,20.1l-1.3,1c-0.2,0.1-0.2,0.4-0.1,0.6L8.5,24c0.1,0.2,0.4,0.2,0.6,0.1l1.3-0.9c0.8,0.7,1.8,1.3,2.7,1.7 l-0.2,1.7c0,0.2,0.1,0.4,0.3,0.5l3,0.4c0,0,0,0,0.1,0c0.2,0,0.4-0.1,0.4-0.4l0.2-1.6c1.1-0.1,2.1-0.3,3.1-0.7l1,1.4 c0.1,0.2,0.4,0.2,0.6,0.1l2.4-1.8c0.1-0.1,0.1-0.2,0.2-0.3c0-0.1,0-0.2-0.1-0.3l-1-1.3c0.7-0.8,1.3-1.7,1.7-2.7l1.7,0.2 c0.2,0,0.4-0.1,0.5-0.3l0.4-3C27.4,16.4,27.3,16.2,27.1,16.1z M16.4,20.2c-2.1,0-3.8-1.7-3.8-3.8c0-2.1,1.7-3.8,3.8-3.8 s3.8,1.7,3.8,3.8C20.2,18.5,18.5,20.2,16.4,20.2z');
-	icon.fillColor = whiteColor;
-	icon.transformContent = false;
-	icon.scaling = 1 / this.view.zoom;
-	icon.position = circle.position;
-	this.icon = icon;
-	this.addChild(icon);
+	if (this.displayComponentList()) {
+		this.onFrame = function() {
+			var frameFactor = factorGen.getNextFactor();
+			var angle = animationAngleRotation * frameFactor;
 
-	this.onMouseEnter = function() {
-		this.circle.fillColor = greenColor;
-	}
-
-	this.onMouseLeave = function() {
-		this.circle.fillColor = blackColor;
-	}
-
-	this.onMouseDown = function(event) {
-		event.preventDefault();
-		event.stopPropagation();
-	}
-
-	this.onClick = function(event) {
-		event.preventDefault();
-		event.stopPropagation();
-		var factorGen = new EaseInTimer(animationFrameLength);
-
-		if (this.displayComponentList()) {
-			this.onFrame = function() {
-				var frameFactor = factorGen.getNextFactor();
-				var angle = animationAngleRotation * frameFactor;
-				this.icon.rotate(angle, this.circle.bounds.center);
-
-				if (EaseInTimer.frameCount === animationFrameLength) {
-					this.onFrame = undefined;
-				}
+			if (EaseInTimer.frameCount === animationFrameLength) {
+				this.onFrame = undefined;
 			}
 		}
 	}
@@ -74,14 +41,11 @@ function ComponentMenu( args ) {
 	var oldDraw = this.draw;
 	this.draw = function() {
 
-		this.circle.matrix.a = 1 / this.view.zoom;
-		this.circle.matrix.d = 1 / this.view.zoom;
-		this.icon.scaling = 1 / this.view.zoom;
 		if (this.itemGroup.onFrame) {
-			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.scaling.y, this.pointArg.x - 12 / this.view.zoom, this.pointArg.y + 22 / this.view.zoom));
+			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.scaling.y, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 		}
 		else {
-			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - 12 / this.view.zoom, this.pointArg.y + 22 / this.view.zoom));
+			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 		}
 		oldDraw.apply(this, arguments);
 	}.bind(this);
@@ -113,15 +77,15 @@ ComponentMenu.prototype.displayComponentList = function() {
 	}
 
 	this.itemGroup.applyMatrix = false;
-	this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 0, this.pointArg.x - 12 / this.view.zoom, this.pointArg.y + 22 / this.view.zoom));
+	this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 0, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 
 	var factorGen = new EaseInTimer(animationFrameLength, 0);
 
 	this.itemGroup.onFrame = function() {
 		var frameFactor = factorGen.getNextFactor();
-		this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.matrix.d + frameFactor / this.view.zoom, this.pointArg.x - 12 / this.view.zoom, this.pointArg.y + 22 / this.view.zoom));
+		this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.matrix.d + frameFactor / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 		if (this.itemGroup.scaling.y >= 1) {
-			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - 12 / this.view.zoom, this.pointArg.y + 22 / this.view.zoom));
+			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 			this.itemGroup.onFrame = undefined;
 		}
 
@@ -133,18 +97,16 @@ ComponentMenu.prototype.displayComponentList = function() {
 ComponentMenu.prototype.removeMenu = function() {
 	this.remove();
 	this.itemGroup.remove();
-	this.icon.remove();
-	this.circle.remove();
 }
 
 function ComponentMenuItem( args ) {
 	paper.Group.prototype.constructor.apply( this );
 	var bg = new paper.Shape.Rectangle(args.point, new paper.Size(200, componentItemHeight));
 	bg.fillColor = blackColor;
-	bg.onMouseEnter = function() {
+	this.onMouseEnter = function() {
 		bg.fillColor = greenColor;
 	}
-	bg.onMouseLeave = function() {
+	this.onMouseLeave = function() {
 		bg.fillColor = blackColor;
 	}
 	this.addChild(bg);
