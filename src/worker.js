@@ -218,7 +218,7 @@ function runWorker(self) {
 
 	handlers.soloAlternate = function( params ) {
 
-		font.setAlternateFor( params.unicode, params.glyphName );
+		font.setAlternatesFor( params.unicode, params.glyphName );
 
 		if (!currValues) {
 			return true;
