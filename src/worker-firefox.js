@@ -64,9 +64,7 @@ function prepareWorker() {
 
 		handlers.update = function( params ) {
 			currValues = params;
-			console.profile('update');
 			font.update( currValues );
-			console.profileEnd('update');
 			font.updateOTCommands();
 			var result = font.toArrayBuffer();
 			return result;
