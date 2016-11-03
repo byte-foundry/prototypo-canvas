@@ -162,8 +162,13 @@ function runWorker(self) {
 		currName = name;
 		if ( templateName in fontsMap ) {
 			font = fontsMap[templateName];
+			font.resetComponents();
 			translateSubset();
-			return null;
+			Object.keys( font.glyphMap ).forEach(function(key) {
+				solvingOrders[key] = font.glyphMap[key].solvingOrder;
+			});
+
+			return solvingOrders;
 		}
 
 		var fontObj = JSON.parse( fontSource );
