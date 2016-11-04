@@ -72,20 +72,20 @@ function displayComponents( glyph, showNodes ) {
 				}
 
 				component.onMouseEnter = function() {
-					if (!this._showComponents) {
+					if (this._showComponents) {
 						component.oldFillColor = component.fillColor;
 						component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
 					}
 				}.bind(this);
 
 				component.onMouseLeave = function() {
-					if (!this._showComponents) {
+					if (this._showComponents) {
 						component.fillColor = component.oldFillColor;
 					}
 				}.bind(this);
 
 				component.onClick = function(event) {
-					if (!this._showComponents) {
+					if (this._showComponents) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.displayComponentList(glyph, component.componentId, event.point);

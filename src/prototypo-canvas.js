@@ -41,6 +41,7 @@ function PrototypoCanvas( opts ) {
 	this.fontsMap = {};
 	this.isMousedown = false;
 	this.exportingZip = false;
+	this.allowMove = true;
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -159,7 +160,9 @@ function PrototypoCanvas( opts ) {
 			}
 		}
 
-		pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
+		if (pCanvasInstance.allowMove) {
+			pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
+		}
 	};
 
 	this.view.onMouseDrag = function(event) {
@@ -254,6 +257,7 @@ function PrototypoCanvas( opts ) {
 			confirmCursorsChanges(this.changesToConfirm);
 			delete this.changesToConfirm;
 		}
+		pCanvasInstance.prevPos = undefined;
 		this.selectedHandle = null;
 		this.selectedSegment = null;
 	};
