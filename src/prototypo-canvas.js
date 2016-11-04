@@ -511,7 +511,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 				this.displayChar( this.font.glyphMap[unicode[code]] );
 			}
 
-			this.font.setAlternateFor(code, unicode[code]);
+			this.font.setAlternatesFor(code, unicode[code]);
 		}.bind(this));
 
 		this.enqueue({
@@ -521,7 +521,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 			}
 		});
 	} else {
-		this.font.setAlternateFor( unicode, glyphName );
+		this.font.setAlternatesFor(unicode, glyphName);
 
 		this.displayChar( this.font.glyphMap[glyphName] );
 

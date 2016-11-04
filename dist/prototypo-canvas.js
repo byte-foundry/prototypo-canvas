@@ -536,7 +536,7 @@ return /******/ (function(modules) { // webpackBootstrap
 					this.displayChar( this.font.glyphMap[unicode[code]] );
 				}
 	
-				this.font.setAlternateFor(code, unicode[code]);
+				this.font.setAlternatesFor(code, unicode[code]);
 			}.bind(this));
 	
 			this.enqueue({
@@ -546,7 +546,7 @@ return /******/ (function(modules) { // webpackBootstrap
 				}
 			});
 		} else {
-			this.font.setAlternateFor( unicode, glyphName );
+			this.font.setAlternatesFor(unicode, glyphName);
 	
 			this.displayChar( this.font.glyphMap[glyphName] );
 	
@@ -5036,7 +5036,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		handlers.soloAlternate = function( params ) {
 	
-			font.setAlternateFor( params.unicode, params.glyphName );
+			font.setAlternatesFor( params.unicode, params.glyphName );
 	
 			if (!currValues) {
 				return true;
