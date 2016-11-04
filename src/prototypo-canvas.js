@@ -304,16 +304,14 @@ function PrototypoCanvas( opts ) {
 			delete this.latestRafValues;
 		}
 
-		drawUIEditor(paper, !this._showNodes, UIEditor);
-
 		if(this.prevGlyph !== this.currGlyph) {
 			this.prevGlyph = this.currGlyph;
-			if (!(this.latestRafValues && this.currGlyph && !this.exportingZip)) {
-				drawTypographicFrame.bind(this)();
-			}
 
 			delete UIEditor.selection;
 		}
+
+		drawTypographicFrame.bind(this)();
+		drawUIEditor(paper, !this._showNodes, UIEditor);
 	};
 	updateLoop();
 }
@@ -327,6 +325,12 @@ function drawTypographicFrame() {
 			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
 		}
 	}
+
+	this.typographicFrame.spacingLeft.strokeWidth = 1 / this.zoom;
+	this.typographicFrame.spacingRight.strokeWidth = 1 / this.zoom;
+	this.typographicFrame.low.size.height = 1 / this.zoom;
+	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
+	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
 }
 
 PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
