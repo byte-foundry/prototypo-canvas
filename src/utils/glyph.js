@@ -1,5 +1,6 @@
 var ComponentMenu = require('../ui/componentMenu');
 var paper = prototypo;
+var segment = require('./segment.js');
 
 function displayComponents( glyph, showNodes ) {
 	glyph.components.forEach(function(component) {
@@ -15,8 +16,8 @@ function displayComponents( glyph, showNodes ) {
 						center: component.anchors[0].anchor,
 						radius: 10 / this.view.zoom,
 						strokeWidth: 1 / this.view.zoom,
-						fillColor: new paper.Color(1, 1, 1, 0.01),
-						strokeColor: undefined,
+						fillColor: new paper.Color(0.5, 1, 1, 0.01),
+						strokeColor: new paper.Color(0.5, 0.5, 0.5),
 					});
 
 					var oldDraw = point.draw;
@@ -27,19 +28,19 @@ function displayComponents( glyph, showNodes ) {
 					}.bind(this);
 
 					point.onMouseEnter = function() {
-						if (!this._showNodes) {
+						if (this._showComponents) {
 							point.strokeColor = "#24d390";
 						}
 					}.bind(this);
 
 					point.onMouseLeave = function() {
-						if (!this._showNodes) {
-							point.strokeColor = undefined;
+						if (this._showComponents) {
+							point.strokeColor = new paper.Color(0.5, 0.5, 0.5);
 						}
 					}.bind(this);
 
 					point.onClick = function(event) {
-						if (!this._showNodes) {
+						if (this._showComponents) {
 							event.preventDefault();
 							event.stopPropagation();
 							this.displayComponentList(glyph, component.componentId, event.point);
@@ -53,23 +54,38 @@ function displayComponents( glyph, showNodes ) {
 
 					component.optionPoint = point;
 				}
+				else {
+					if (!this._showComponents) {
+						component.optionPoint.strokeColor = undefined;
+					}
+					else {
+						component.optionPoint.strokeColor = new paper.Color(0.5, 0.5, 0.5);
+					}
+				}
 			}
 			else {
+				if (this._showComponents) {
+					component.fillColor = new paper.Color(0.5, 0.5, 0.5);
+				}
+				else {
+					component.fillColor = '#333333';
+				}
+
 				component.onMouseEnter = function() {
-					if (!this._showNodes) {
+					if (this._showComponents) {
 						component.oldFillColor = component.fillColor;
 						component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
 					}
 				}.bind(this);
 
 				component.onMouseLeave = function() {
-					if (!this._showNodes) {
+					if (this._showComponents) {
 						component.fillColor = component.oldFillColor;
 					}
 				}.bind(this);
 
 				component.onClick = function(event) {
-					if (!this._showNodes) {
+					if (this._showComponents) {
 						event.preventDefault();
 						event.stopPropagation();
 						this.displayComponentList(glyph, component.componentId, event.point);
@@ -135,7 +151,9 @@ function displayGlyph( _glyph ) {
 	}
 
 	this.currGlyph.contours.forEach(function(contour) {
-		contour.fullySelected = this._showNodes;
+		if (contour.skeleton) {
+			contour.fullySelected = this._showNodes;
+		}
 	}, this);
 
 	if ( this.currGlyph.components.length ) {
@@ -159,54 +177,19 @@ var SelectionState = {
 	viewCoords = new Float32Array(6);
 
 function drawHandles(ctx, segments, matrix, settings, zoom) {
+
+	for (var i = 0, l = segments.length; i < l; i++) {
+		if (segments[i].selected) {
+			segment.drawSegment(ctx, matrix, segments[i], settings, zoom);
+		}
+	}
+}
+
+function drawSkeletonNode(ctx, segments, matrix, settings, zoom) {
 	var size = settings.handleSize,
 		half = size / 2,
 		pX,
 		pY;
-
-	function drawHandle(j) {
-		var hX = Math.round( viewCoords[j] ),
-			hY = Math.round( viewCoords[j + 1] ),
-			text;
-
-		if ( viewCoords[0] !== viewCoords[j] ||
-				viewCoords[1] !== viewCoords[j + 1]) {
-
-			ctx.beginPath();
-			ctx.strokeStyle = settings.handleColor;
-			ctx.fillStyle = settings.handleColor;
-			ctx.moveTo(pX, pY);
-			ctx.lineTo(hX, hY);
-			ctx.stroke();
-			ctx.beginPath();
-			ctx.arc(hX, hY, half, 0, Math.PI * 2, true);
-			ctx.fill();
-
-			if ( settings.drawCoords ) {
-				text = Math.round( worldCoords[j] ) + ',' +
-					Math.round( worldCoords[j + 1] );
-
-				// use alpha to reduce the clutter caused by all this text when
-				// zooming out
-				if ( zoom < 1.7 ) {
-					ctx.globalAlpha = 0.2;
-				} else if ( zoom < 3 ) {
-					ctx.globalAlpha = 0.4;
-				}
-				ctx.fillText(
-					text,
-					hX - half - 3 - ctx.measureText(text).width,
-					// The text is slightly above the marker. This avoids
-					// overlapping when the handle vector is horizontal, which
-					// is quite a frequent case.
-					hY - 2
-				);
-				if ( zoom < 3 ) {
-					ctx.globalAlpha = 1;
-				}
-			}
-		}
-	}
 
 	for (var i = 0, l = segments.length; i < l; i++) {
 		var segment = segments[i];
@@ -215,21 +198,11 @@ function drawHandles(ctx, segments, matrix, settings, zoom) {
 		var state = segment._selection;
 		pX = Math.round( viewCoords[0] );
 		pY = Math.round( viewCoords[1] );
-		if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
-			drawHandle(2);
-		}
-		if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
-			drawHandle(4);
-		}
 		if (segment.expand) {
 			ctx.strokeStyle = settings.nodeColor;
 			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 		}
-		else if (!segment.expandedTo){
-			// Draw a rectangle at segment.point:
-			ctx.fillStyle = settings.nodeColor;
-			ctx.fillRect( pX - half, pY - half, size, size );
-		}
+
 		ctx.font = settings.handleFont;
 
 		if ( settings.drawCoords ) {
@@ -246,10 +219,14 @@ function drawHandles(ctx, segments, matrix, settings, zoom) {
 				ctx.globalAlpha = 1;
 			}
 		}
+
+		if (segment.selected) {
+			drawSkeleton(ctx, segment, matrix, settings, zoom);
+		}
 	}
 }
 
-function drawSkeletons(ctx, segments, matrix, settings, zoom) {
+function drawSkeleton(ctx, segment, matrix, settings, zoom) {
 	function drawBones(start, end, width) {
 		var sX = Math.round( start[0] ),
 			sY = Math.round( start[1] ),
@@ -263,53 +240,51 @@ function drawSkeletons(ctx, segments, matrix, settings, zoom) {
 		ctx.stroke();
 	}
 
-	for (var i = 0, l = segments.length; i < l; i++) {
-		var segment = segments[i];
-		var state = segment._selection;
-		var boneStartCoords = new Float32Array(6);
-		segment._transformCoordinates(matrix, boneStartCoords, false);
+	var state = segment._selection;
+	var boneStartCoords = new Float32Array(6);
+	segment._transformCoordinates(matrix, boneStartCoords, false);
 
-		if (segment.expand && segment.expandedTo && segment.expandedTo.length > 0) {
-			var firstRib = segment.expandedTo[0];
-			var secondRib = segment.expandedTo[1];
-			var ribFirstCoords = new Float32Array(6);
-			var ribSecondCoords = new Float32Array(6);
-			firstRib._transformCoordinates(matrix, ribFirstCoords, false);
-			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
-			drawBones(boneStartCoords, ribFirstCoords, 1);
-			drawBones(boneStartCoords, ribSecondCoords, 1);
-		} else {
-			var firstRib = segment.expandedTo[0];
-			var secondRib = segment.expandedTo[1];
-			var ribFirstCoords = new Float32Array(6);
-			var ribSecondCoords = new Float32Array(6);
-			firstRib._transformCoordinates(matrix, ribFirstCoords, false);
-			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
-			drawBones(ribFirstCoords, ribSecondCoords, 1);
-		}
+	if (segment.expand && segment.expandedTo && segment.expandedTo.length > 0) {
+		var firstRib = segment.expandedTo[0];
+		var secondRib = segment.expandedTo[1];
+		var ribFirstCoords = new Float32Array(6);
+		var ribSecondCoords = new Float32Array(6);
+		firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+		secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+		drawBones(boneStartCoords, ribFirstCoords, 1);
+		drawBones(boneStartCoords, ribSecondCoords, 1);
+	} else {
+		var firstRib = segment.expandedTo[0];
+		var secondRib = segment.expandedTo[1];
+		var ribFirstCoords = new Float32Array(6);
+		var ribSecondCoords = new Float32Array(6);
+		firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+		secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+		drawBones(ribFirstCoords, ribSecondCoords, 1);
 	}
 	ctx.lineWidth = 1;
 }
 
 function _drawSelected( ctx, matrix ) {
-	ctx.beginPath();
-	// Now stroke it and draw its handles:
-	ctx.stroke();
-	drawHandles(
-		ctx,
-		this._segments,
-		matrix,
-		this._project._scope.settings,
-		this._project._view._zoom
-	);
-	if (this.skeleton) {
-		drawSkeletons(
+	if (this.fullySelected || (this.expandedFrom && this.expandedFrom.fullySelected)) {
+		ctx.beginPath();
+		// Now stroke it and draw its handles:
+		ctx.stroke();
+		drawHandles(
 			ctx,
 			this._segments,
 			matrix,
 			this._project._scope.settings,
 			this._project._view._zoom
 		);
+		if (this.skeleton) {
+			drawSkeletonNode(ctx,
+				this._segments,
+				matrix,
+				this._project._scope.settings,
+				this._project._view._zoom
+			)
+		}
 	}
 }
 

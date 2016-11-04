@@ -1,14 +1,16 @@
 var prototypo		= require('prototypo.js');
 var assign			= require('es6-object-assign').assign;
 var cloneDeep		= require('lodash/cloneDeep');
+var forEach			= require('lodash/forEach');
 var EventEmitter	= require('wolfy87-eventemitter');
 var glyph			= require('./utils/glyph');
+var segment			= require('./utils/segment');
 var mouseHandlers	= require('./utils/mouseHandlers');
 var init			= require('./utils/init');
 var loadFont		= require('./utils/loadFont');
 var {drawUIEditor, createUIEditor} = require('./utils/ui-editor');
 
-var _ = { assign: assign, cloneDeep: cloneDeep },
+var _ = { assign: assign, cloneDeep: cloneDeep, forEach: forEach },
 	paper = prototypo.paper;
 
 // constructor
@@ -39,6 +41,7 @@ function PrototypoCanvas( opts ) {
 	this.fontsMap = {};
 	this.isMousedown = false;
 	this.exportingZip = false;
+	this.allowMove = true;
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -54,6 +57,15 @@ function PrototypoCanvas( opts ) {
 	this.typographicFrame.low.fillColor = '#777777';
 	this.typographicFrame.xHeight.fillColor = '#777777';
 	this.typographicFrame.capHeight.fillColor = '#777777';
+
+	this.view.onMouseMove = function (e) {
+		if (!fontInstance.allowMove) {
+			e.preventDefault();
+			e.stopPropagation();
+		}
+
+		return false;
+	}
 
 	var pCanvasInstance = this;
 
@@ -104,14 +116,30 @@ function PrototypoCanvas( opts ) {
 				},
 				segments: true,
 				handles: true,
-				tolerance: (10 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
+				tolerance: (20 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
 			});
 			// matching skeleton first
 			var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
 
-			skeletons.forEach((item) => { item.visible = false; });
+			skeletons.forEach((item) => {
+				item.visible = false;
+			});
 
 			if(hitResult) {
+				if (hitResult.segment.expandedTo) {
+					skeletons.forEach((item) => {
+						_.forEach(item.expandedTo, function (expanded) {
+							expanded.selected = false;
+						});
+						item.selected = false;
+					});
+
+					_.forEach(hitResult.segment.expandedTo, function (expanded) {
+						expanded.selected = true;
+						hitResult.segment.selected = true;
+					});
+				}
+
 				if(hitResult.type.startsWith('handle')) {
 					this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
 					this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
@@ -132,7 +160,9 @@ function PrototypoCanvas( opts ) {
 			}
 		}
 
-		pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
+		if (pCanvasInstance.allowMove) {
+			pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
+		}
 	};
 
 	this.view.onMouseDrag = function(event) {
@@ -227,6 +257,7 @@ function PrototypoCanvas( opts ) {
 			confirmCursorsChanges(this.changesToConfirm);
 			delete this.changesToConfirm;
 		}
+		pCanvasInstance.prevPos = undefined;
 		this.selectedHandle = null;
 		this.selectedSegment = null;
 	};
