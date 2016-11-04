@@ -208,8 +208,7 @@ function runWorker(self) {
 				if (glyph.unicode === unicode) {
 					if (typeof properties === 'string') {
 						result[properties] = glyph[properties];
-					}
-					else if (Array.isArray(properties)) {
+					} else if (Array.isArray(properties)) {
 						properties.forEach(function(property) {
 							result[property] = glyph[property];
 						});
@@ -418,9 +417,6 @@ onconnect = function(e) {
 
 	port.start();
 	port.onerror = function(e) {
-		console.log('values : ', currValues);
-		console.log('font : ', font);
-
 		throw new Error(e);
 	};
 };

@@ -53,19 +53,18 @@
   "devDependencies": {
     "browser-sync": "^2.11.1",
     "chai": "^3.5.0",
+    "elzevir.ptf": "byte-foundry/elzevir.ptf",
     "envify": "^3.4.0",
-    "eslint": "^2.2.0",
-    "eslint-plugin-mocha": "^2.0.0",
+    "eslint": "^3.8.1",
+    "eslint-plugin-mocha": "^4.7.0",
     "ghooks": "^1.0.3",
     "gulp": "^3.9.1",
     "gulp-shelter": "^1.0.1",
     "john-fell.ptf": "byte-foundry/john-fell.ptf",
-    "jscs": "^2.10.1",
     "mocha": "^2.4.5",
     "mocha-phantomjs": "^4.0.2",
     "test.ptf": "byte-foundry/test.ptf",
     "venus.ptf": "byte-foundry/venus.ptf",
-    "elzevir.ptf": "byte-foundry/elzevir.ptf",
     "webpack": "^1.12.14"
   }
 }

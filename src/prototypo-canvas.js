@@ -8,7 +8,7 @@ var segment			= require('./utils/segment');
 var mouseHandlers	= require('./utils/mouseHandlers');
 var init			= require('./utils/init');
 var loadFont		= require('./utils/loadFont');
-var {drawUIEditor, createUIEditor} = require('./utils/ui-editor');
+var { drawUIEditor, createUIEditor } = require('./utils/ui-editor');
 
 var _ = { assign: assign, cloneDeep: cloneDeep, forEach: forEach },
 	paper = prototypo.paper;
@@ -58,7 +58,7 @@ function PrototypoCanvas( opts ) {
 	this.typographicFrame.xHeight.fillColor = '#777777';
 	this.typographicFrame.capHeight.fillColor = '#777777';
 
-	this.view.onMouseMove = function (e) {
+	this.view.onMouseMove = function(e) {
 		if (!fontInstance.allowMove) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -84,13 +84,13 @@ function PrototypoCanvas( opts ) {
 			return cursors;
 		};
 
-		emitEvent('manualchange', [createIdentityCursors(newCursors), true]);
+		emitEvent('manualchange', [ createIdentityCursors(newCursors), true ]);
 	};
 
 	var UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
-			emitEvent('manualchange', [cursors]);
-			if(!UIEditor.changesToConfirm) {
+			emitEvent('manualchange', [ cursors ]);
+			if (!UIEditor.changesToConfirm) {
 				UIEditor.changesToConfirm = cursors;
 			}
 		},
@@ -100,14 +100,14 @@ function PrototypoCanvas( opts ) {
 			delete UIEditor.changesToConfirm;
 		},
 		onResetCursor(contourId, nodeId) {
-			emitEvent('manualreset', [contourId, nodeId]);
+			emitEvent('manualreset', [ contourId, nodeId ]);
 		}
 	});
 
 	this.view.onMouseDown = function(event) {
-		if(pCanvasInstance._showNodes) {
+		if (pCanvasInstance._showNodes) {
 			// if visible, skeleton points can be matched
-			var skeletons = paper.project.getItems({selected: true}).filter((item) => { return item.skeleton && !item.visible; });
+			var skeletons = paper.project.getItems({ selected: true }).filter((item) => { return item.skeleton && !item.visible; });
 			skeletons.forEach((item) => { item.visible = true; });
 
 			var results = paper.project.hitTestAll(event.point, {
@@ -125,22 +125,22 @@ function PrototypoCanvas( opts ) {
 				item.visible = false;
 			});
 
-			if(hitResult) {
+			if (hitResult) {
 				if (hitResult.segment.expandedTo) {
 					skeletons.forEach((item) => {
-						_.forEach(item.expandedTo, function (expanded) {
+						_.forEach(item.expandedTo, function(expanded) {
 							expanded.selected = false;
 						});
 						item.selected = false;
 					});
 
-					_.forEach(hitResult.segment.expandedTo, function (expanded) {
+					_.forEach(hitResult.segment.expandedTo, function(expanded) {
 						expanded.selected = true;
 						hitResult.segment.selected = true;
 					});
 				}
 
-				if(hitResult.type.startsWith('handle')) {
+				if (hitResult.type.startsWith('handle')) {
 					this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
 					this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
 					this.selectedHandleNorm = this.selectedHandle.length;
@@ -166,12 +166,16 @@ function PrototypoCanvas( opts ) {
 	};
 
 	this.view.onMouseDrag = function(event) {
-		if(this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
+		var contourIdx;
+		var nodeIdx;
+		var cursors;
+
+		if (this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
 			var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
 
-			var eventNormalized = event.delta.multiply(this.selectedHandleNorm/mouseVecNorm);
+			var eventNormalized = event.delta.multiply(this.selectedHandleNorm / mouseVecNorm);
 			var newHandlePosition = new paper.Point(
 				this.selectedHandlePos.x + eventNormalized.x,
 				this.selectedHandlePos.y - eventNormalized.y
@@ -187,25 +191,23 @@ function PrototypoCanvas( opts ) {
 			var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
 			var dirType = (invertDir && !isDirIn) || (!invertDir && isDirIn) ? 'dirIn' : 'dirOut';
 
-			var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-			var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-			var cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
+			contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+			nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+			cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
 			this.changesToConfirm = cursors;
-			return emitEvent('manualchange', [cursors]);
-		}
-		else if (this.selectedSegment && pCanvasInstance._showNodes) {
-			if(this.selectedSegment.path.skeleton) {
+			return emitEvent('manualchange', [ cursors ]);
+		} else if (this.selectedSegment && pCanvasInstance._showNodes) {
+			if (this.selectedSegment.path.skeleton) {
 				// change skeleton x, y
-				var contourIdx = this.selectedSegment.contourIdx;
-				var nodeIdx = this.selectedSegment.nodeIdx;
-				var cursors = {
+				contourIdx = this.selectedSegment.contourIdx;
+				nodeIdx = this.selectedSegment.nodeIdx;
+				cursors = {
 					[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 					[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
 				};
 				this.changesToConfirm = cursors;
-				return emitEvent('manualchange', [cursors]);
-			}
-			else {
+				return emitEvent('manualchange', [ cursors ]);
+			} else {
 				// change width
 
 				if (this.selectedSegment.expandedFrom.skeletonBaseWidth === undefined) {
@@ -220,26 +222,24 @@ function PrototypoCanvas( opts ) {
 				);
 				var deltaWidth = (direction.x * event.delta.x - direction.y * event.delta.y) / baseWidth;
 
-				if(this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
+				if (this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
 					deltaWidth *= -1;
 					if (distrib !== 0) {
 						deltaWidth /= distrib;
 					}
-				}
-				else if (distrib !== 1) {
+				} else if (distrib !== 1) {
 					deltaWidth /= (1 - distrib);
 				}
 
-				var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-				var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-				var cursors = {
+				contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+				nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+				cursors = {
 					[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: { width: deltaWidth },
 				};
 				this.changesToConfirm = cursors;
-				return emitEvent('manualchange', [cursors]);
+				return emitEvent('manualchange', [ cursors ]);
 			}
-		}
-		else if(pCanvasInstance.prevPos) {
+		} else if (pCanvasInstance.prevPos) {
 			var currPos = new paper.Point(event.event.clientX, event.event.clientY),
 				delta = currPos.subtract(pCanvasInstance.prevPos);
 
@@ -252,8 +252,8 @@ function PrototypoCanvas( opts ) {
 		pCanvasInstance.prevPos = null;
 	};
 
-	this.view.onMouseUp = function(event) {
-		if(this.changesToConfirm) {
+	this.view.onMouseUp = function() {
+		if (this.changesToConfirm) {
 			confirmCursorsChanges(this.changesToConfirm);
 			delete this.changesToConfirm;
 		}
@@ -304,7 +304,7 @@ function PrototypoCanvas( opts ) {
 			delete this.latestRafValues;
 		}
 
-		if(this.prevGlyph !== this.currGlyph) {
+		if (this.prevGlyph !== this.currGlyph) {
 			this.prevGlyph = this.currGlyph;
 
 			delete UIEditor.selection;
@@ -320,7 +320,7 @@ function drawTypographicFrame() {
 	if (this.currGlyph) {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
-		if(this.latestRafValues) {
+		if (this.latestRafValues) {
 			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
 			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
 		}
@@ -486,14 +486,13 @@ PrototypoCanvas.prototype.update = function( values ) {
 PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callback) {
 	var unicode = 0;
 
-	if (typeof glyph === 'string' && glyph.length > 0){
+	if (typeof glyph === 'string' && glyph.length > 0) {
 		if (glyph.length > 1) {
 			glyph = glyph[0];
 		}
 
 		unicode = glyph.charCodeAt(0);
-	}
-	else if (typeof glyph === 'number') {
+	} else if (typeof glyph === 'number') {
 		unicode = glyph;
 	}
 
