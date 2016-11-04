@@ -4,7 +4,6 @@ var cloneDeep		= require('lodash/cloneDeep');
 var forEach			= require('lodash/forEach');
 var EventEmitter	= require('wolfy87-eventemitter');
 var glyph			= require('./utils/glyph');
-var segment			= require('./utils/segment');
 var mouseHandlers	= require('./utils/mouseHandlers');
 var init			= require('./utils/init');
 var loadFont		= require('./utils/loadFont');
@@ -59,7 +58,7 @@ function PrototypoCanvas( opts ) {
 	this.typographicFrame.capHeight.fillColor = '#777777';
 
 	this.view.onMouseMove = function(e) {
-		if (!fontInstance.allowMove) {
+		if (!pCanvasInstance.allowMove) {
 			e.preventDefault();
 			e.stopPropagation();
 		}
