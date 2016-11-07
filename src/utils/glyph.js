@@ -9,6 +9,9 @@ function displayComponents( glyph, showNodes ) {
 			contour.fullySelected = showNodes && !contour.skeleton;
 		});
 
+		var componentColor = this.fill ? '#333333' : undefined;
+		var componentHoverColor = '#24d390';
+
 		if (component.multiple) {
 			if (component.name.indexOf('none') !== -1) {
 				if (!component.optionPoint) {
@@ -29,7 +32,7 @@ function displayComponents( glyph, showNodes ) {
 
 					point.onMouseEnter = function() {
 						if (this._showComponents) {
-							point.strokeColor = "#24d390";
+							point.strokeColor = componentHoverColor;
 						}
 					}.bind(this);
 
@@ -68,7 +71,7 @@ function displayComponents( glyph, showNodes ) {
 					component.fillColor = new paper.Color(0.5, 0.5, 0.5);
 				}
 				else {
-					component.fillColor = '#333333';
+					component.fillColor = componentColor;
 				}
 
 				component.onMouseEnter = function() {
@@ -122,6 +125,11 @@ function displayGlyph( _glyph ) {
 		this.currGlyph.visible = false;
 		this.currGlyph.components.forEach(function(component) {
 			component.visible = false;
+
+			if (component.optionPoint) {
+				component.optionPoint.remove();
+				component.optionPoint = undefined;
+			}
 		}, this);
 		this.currGlyph.contours.forEach(({segments}) => {
 			segments.forEach(({directionHandle}) => {
