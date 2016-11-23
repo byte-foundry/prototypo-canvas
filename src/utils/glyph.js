@@ -18,7 +18,7 @@ function displayComponents( glyph, showNodes ) {
 					var point = new paper.Shape.Circle({
 						center: component.anchors[0].anchor,
 						radius: 10 / this.view.zoom,
-						strokeWidth: 1 / this.view.zoom,
+						strokeWidth: 2 / this.view.zoom,
 						fillColor: new paper.Color(0.5, 1, 1, 0.01),
 						strokeColor: new paper.Color(0.5, 0.5, 0.5),
 					});
@@ -26,7 +26,7 @@ function displayComponents( glyph, showNodes ) {
 					var oldDraw = point.draw;
 					point.draw = function() {
 						point.radius = 10 / this.view.zoom;
-						point.strokeWidth = 1 / this.view.zoom,
+						point.strokeWidth = 2 / this.view.zoom,
 						oldDraw.apply(point, arguments);
 					}.bind(this);
 
