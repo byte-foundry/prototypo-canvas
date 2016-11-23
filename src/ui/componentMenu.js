@@ -113,7 +113,7 @@ function ComponentMenuItem( args ) {
 
 	var text = new paper.PointText(new paper.Point(componentItemPadding, componentItemPadding));
 	text.content = args.text;
-	text.fontSize = 20;
+	text.fontSize = 16;
 	text.fillColor = whiteColor;
 	text.matrix.d = -1;
 	var textContainer = new paper.Group({
