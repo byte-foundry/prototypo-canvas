@@ -188,7 +188,15 @@ function PrototypoCanvas( opts ) {
 
 			var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
 			var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
-			var dirType = (invertDir && !isDirIn) || (!invertDir && isDirIn) ? 'dirIn' : 'dirOut';
+			//If point is smooth we take the dir that is not undefined else we take the dir
+			//we're modifying
+			var dirType = this.selectedSegment.expandedFrom.type === 'smooth'
+				? !this.selectedSegment.expandedFrom.dirIn
+					? 'dirOut'
+					: 'dirIn'
+				: (invertDir && !isDirIn) || (!invertDir && isDirIn)
+					? 'dirIn' :
+					'dirOut';
 
 			contourIdx = this.selectedSegment.expandedFrom.contourIdx;
 			nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
@@ -316,7 +324,7 @@ function PrototypoCanvas( opts ) {
 }
 
 function drawTypographicFrame() {
-	if (this.currGlyph) {
+	if (this.currGlyph && this.currGlyph.ot.advanceWidth) {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
 		if (this.latestRafValues) {
@@ -422,7 +430,7 @@ PrototypoCanvas.priorities = [
 	'svgFont',
 	'otfFont',
 	'alternate',
-	'getGlyphProperty'
+	'getGlyphsProperties'
 ];
 
 PrototypoCanvas.prototype.enqueue = function( message ) {
@@ -482,23 +490,15 @@ PrototypoCanvas.prototype.update = function( values ) {
 	});
 };
 
-PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callback) {
-	var unicode = 0;
-
-	if (typeof glyph === 'string' && glyph.length > 0) {
-		if (glyph.length > 1) {
-			glyph = glyph[0];
-		}
-
-		unicode = glyph.charCodeAt(0);
-	} else if (typeof glyph === 'number') {
-		unicode = glyph;
-	}
+PrototypoCanvas.prototype.getGlyphsProperties = function(properties, callback) {
+	var names = this.subset.map(function(glyph) {
+		return glyph.name;
+	});
 
 	this.enqueue({
-		type: 'getGlyphProperty',
+		type: 'getGlyphsProperties',
 		data: {
-			unicode: unicode,
+			names: names,
 			properties: properties
 		},
 		callback: (typeof callback === 'function' ? callback : undefined)
@@ -506,6 +506,7 @@ PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callbac
 }
 
 PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
+	var result = [];
 	if ( !glyphName ) {
 		Object.keys(unicode).forEach(function(code) {
 
@@ -513,7 +514,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 				this.displayChar( this.font.glyphMap[unicode[code]] );
 			}
 
-			this.font.setAlternatesFor(code, unicode[code]);
+			result = result.concat(this.font.setAlternatesFor(code, unicode[code]));
 		}.bind(this));
 
 		this.enqueue({
@@ -523,7 +524,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 			}
 		});
 	} else {
-		this.font.setAlternatesFor(unicode, glyphName);
+		result = result.concat(this.font.setAlternatesFor(unicode, glyphName));
 
 		this.displayChar( this.font.glyphMap[glyphName] );
 
@@ -536,6 +537,7 @@ PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
 		});
 	}
 	this.update( this.latestValues );
+	return result;
 };
 
 PrototypoCanvas.prototype.download =

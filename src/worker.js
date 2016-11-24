@@ -164,6 +164,7 @@ function runWorker(self) {
 			font = fontsMap[templateName];
 			font.resetComponents();
 			translateSubset();
+			var solvingOrders = {};
 			Object.keys( font.glyphMap ).forEach(function(key) {
 				solvingOrders[key] = font.glyphMap[key].solvingOrder;
 			});
@@ -196,21 +197,26 @@ function runWorker(self) {
 		return result;
 	};
 
-	handlers.getGlyphProperty = function(eData) {
+	handlers.getGlyphsProperties = function(eData) {
 		var result = null;
 
 		if (eData.data) {
-			var unicode = eData.data.unicode;
+			var names = eData.data.names;
 			var properties = eData.data.properties;
 			result = {};
 
 			font.glyphs.forEach(function(glyph) {
-				if (glyph.unicode === unicode) {
+				if (names.indexOf(glyph.name) !== -1) {
+
+					if (!result[glyph.unicode]) {
+						result[glyph.unicode] = {};
+					}
+
 					if (typeof properties === 'string') {
-						result[properties] = glyph[properties];
+						result[glyph.unicode][properties] = glyph[properties];
 					} else if (Array.isArray(properties)) {
 						properties.forEach(function(property) {
-							result[property] = glyph[property];
+							result[glyph.unicode][property] = glyph[property];
 						});
 					}
 				}
@@ -234,7 +240,11 @@ function runWorker(self) {
 
 		var altGlyph = font.glyphMap[params.glyphName];
 
-		altGlyph.update( currValues );
+		font.subset.forEach(function( glyph ) {
+			if ((altGlyph.src.relatedGlyphs && altGlyph.src.relatedGlyphs.indexOf(glyph.name) !== -1) || glyph.name === altGlyph.name) {
+				glyph.update(currValues);
+			}
+		});
 		altGlyph.updateOTCommands();
 
 		// Recreate the correct font.ot.glyphs.glyphs object, without
@@ -411,12 +421,14 @@ function prepareWorker(self) {
 	}
 }
 
-onconnect = function(e) {
-	var port = e.ports[0];
-	prepareWorker(port);
+if(self.worker && !self.worker.port) {
+	onconnect = function(e) {
+		var port = e.ports[0];
+		prepareWorker(port);
 
-	port.start();
-	port.onerror = function(e) {
-		throw new Error(e);
+		port.start();
+		port.onerror = function(e) {
+			throw new Error(e);
+		};
 	};
-};
+}
