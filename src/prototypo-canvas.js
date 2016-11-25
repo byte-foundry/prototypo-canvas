@@ -105,14 +105,15 @@ function PrototypoCanvas( opts ) {
 	});
 
 	this.view.onKeyDown = function(event) {
-		if (event.keyCode === 16) {
+		if (event.event.keyCode === 16) {
 			this.isShiftPressed = true;
 		}
 	}
 
 	this.view.onKeyUp = function(event) {
-		if (event.keyCode === 16) {
+		if (event.event.keyCode === 16) {
 			this.isShiftPressed = false;
+			this.grabDirection = undefined;
 		}
 	}
 
@@ -182,6 +183,10 @@ function PrototypoCanvas( opts ) {
 		var nodeIdx;
 		var cursors;
 
+		if (!this.grabDirection) {
+			this.grabDirection = Math.abs(event.delta.x) > Math.abs(event.delta.y) ? 'horizontal' : 'vertical';
+		}
+
 		if (this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
@@ -210,16 +215,25 @@ function PrototypoCanvas( opts ) {
 			return emitEvent('manualchange', [ cursors ]);
 		} else if (this.selectedSegment && pCanvasInstance._showNodes) {
 			if (this.selectedSegment.path.skeleton) {
-				if (event.keyCode === 16) {
-					console.log('shift');
-				}
 				// change skeleton x, y
 				contourIdx = this.selectedSegment.contourIdx;
 				nodeIdx = this.selectedSegment.nodeIdx;
-				cursors = {
-					[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-					[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-				};
+				if (this.isShiftPressed) {
+					cursors = this.grabDirection === 'vertical' ?
+					{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+					} :
+					{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+					};
+				} else {
+					cursors = {
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+					};
+				}
 				this.changesToConfirm = cursors;
 				return emitEvent('manualchange', [ cursors ]);
 			} else {
