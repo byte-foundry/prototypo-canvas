@@ -41,6 +41,7 @@ function PrototypoCanvas( opts ) {
 	this.isMousedown = false;
 	this.exportingZip = false;
 	this.allowMove = true;
+	this.isShiftPressed = false;
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -102,6 +103,18 @@ function PrototypoCanvas( opts ) {
 			emitEvent('manualreset', [ contourId, nodeId ]);
 		}
 	});
+
+	this.view.onKeyDown = function(event) {
+		if (event.keyCode === 16) {
+			this.isShiftPressed = true;
+		}
+	}
+
+	this.view.onKeyUp = function(event) {
+		if (event.keyCode === 16) {
+			this.isShiftPressed = false;
+		}
+	}
 
 	this.view.onMouseDown = function(event) {
 		if (pCanvasInstance._showNodes) {
@@ -197,6 +210,9 @@ function PrototypoCanvas( opts ) {
 			return emitEvent('manualchange', [ cursors ]);
 		} else if (this.selectedSegment && pCanvasInstance._showNodes) {
 			if (this.selectedSegment.path.skeleton) {
+				if (event.keyCode === 16) {
+					console.log('shift');
+				}
 				// change skeleton x, y
 				contourIdx = this.selectedSegment.contourIdx;
 				nodeIdx = this.selectedSegment.nodeIdx;
