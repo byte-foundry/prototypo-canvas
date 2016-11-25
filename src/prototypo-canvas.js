@@ -49,6 +49,7 @@ function PrototypoCanvas( opts ) {
 		low: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+		linearDraggingHelper: undefined,
 	};
 	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
 	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
@@ -114,6 +115,8 @@ function PrototypoCanvas( opts ) {
 		if (event.event.keyCode === 16) {
 			this.isShiftPressed = false;
 			this.grabDirection = undefined;
+			pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
+			this.areHelplinesDrawn = false;
 		}
 	}
 
@@ -219,6 +222,7 @@ function PrototypoCanvas( opts ) {
 				contourIdx = this.selectedSegment.contourIdx;
 				nodeIdx = this.selectedSegment.nodeIdx;
 				if (this.isShiftPressed) {
+					// only use the delta according to the direction set
 					cursors = this.grabDirection === 'vertical' ?
 					{
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
@@ -228,6 +232,23 @@ function PrototypoCanvas( opts ) {
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
 					};
+					if (!this.areHelplinesDrawn) {
+						this.areHelplinesDrawn = true;
+						// draw helplines
+						pCanvasInstance.typographicFrame.linearDraggingHelper = this.grabDirection === 'vertical' ?
+						new paper.Path.Line(
+							new paper.Point( this.selectedSegment.point.x, 50000 ),
+							new paper.Point( this.selectedSegment.point.x, -50000 )
+						) :
+						new paper.Path.Line(
+							new paper.Point( -100000, this.selectedSegment.point.y ),
+							new paper.Point( 100000, this.selectedSegment.point.y )
+						);
+						pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
+						pCanvasInstance.typographicFrame.linearDraggingHelper.opacity = 0.5;
+						pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
+						pCanvasInstance.typographicFrame.linearDraggingHelper.dashArray = [ 8, 8 ];
+					}
 				} else {
 					cursors = {
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
@@ -350,7 +371,7 @@ function drawTypographicFrame() {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
 		if (this.latestRafValues) {
-			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+				this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
 			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
 		}
 	}
