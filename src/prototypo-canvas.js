@@ -42,6 +42,13 @@ function PrototypoCanvas( opts ) {
 	this.exportingZip = false;
 	this.allowMove = true;
 	this.isShiftPressed = false;
+	this.shiftLock = {
+		deltaX: 0,
+		deltaY: 0,
+		isLocked: false,
+		direction: '',
+		isLineDrawn: false,
+	};
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -114,9 +121,12 @@ function PrototypoCanvas( opts ) {
 	this.view.onKeyUp = function(event) {
 		if (event.event.keyCode === 16) {
 			this.isShiftPressed = false;
-			this.grabDirection = undefined;
-			pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
-			this.areHelplinesDrawn = false;
+			pCanvasInstance.shiftLock.isLocked = false;
+			pCanvasInstance.shiftLock.isLineDrawn = false;
+			pCanvasInstance.shiftLock.deltaX = 0;
+			pCanvasInstance.shiftLock.deltaY = 0;
+			pCanvasInstance.shiftLock.direction = '';
+			pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
 		}
 	}
 
@@ -186,10 +196,6 @@ function PrototypoCanvas( opts ) {
 		var nodeIdx;
 		var cursors;
 
-		if (!this.grabDirection) {
-			this.grabDirection = Math.abs(event.delta.x) > Math.abs(event.delta.y) ? 'horizontal' : 'vertical';
-		}
-
 		if (this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
 			// change dir
 			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
@@ -221,9 +227,32 @@ function PrototypoCanvas( opts ) {
 				// change skeleton x, y
 				contourIdx = this.selectedSegment.contourIdx;
 				nodeIdx = this.selectedSegment.nodeIdx;
+
 				if (this.isShiftPressed) {
+
+					//drag locking mechanism
+					if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
+						pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
+						pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
+					} else {
+						pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
+						pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
+					}
+					let lockTrigger = 2;
+					let switchDirectionTrigger = 6;
+					if (!pCanvasInstance.shiftLock.isLocked) {
+						if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
+							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+							pCanvasInstance.shiftLock.isLocked = true;
+						}
+					} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
+							pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
+							pCanvasInstance.shiftLock.isLineDrawn = false;
+							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+					}
+
 					// only use the delta according to the direction set
-					cursors = this.grabDirection === 'vertical' ?
+					cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
 					{
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
 						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
@@ -232,13 +261,13 @@ function PrototypoCanvas( opts ) {
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
 					};
-					if (!this.areHelplinesDrawn) {
-						this.areHelplinesDrawn = true;
-						// draw helplines
-						pCanvasInstance.typographicFrame.linearDraggingHelper = this.grabDirection === 'vertical' ?
+					if (!pCanvasInstance.shiftLock.isLineDrawn) {
+						pCanvasInstance.shiftLock.isLineDrawn = true;
+						// draw helpline
+						pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
 						new paper.Path.Line(
-							new paper.Point( this.selectedSegment.point.x, 50000 ),
-							new paper.Point( this.selectedSegment.point.x, -50000 )
+							new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
+							new paper.Point( this.selectedSegment.point.x - 1, -50000 )
 						) :
 						new paper.Path.Line(
 							new paper.Point( -100000, this.selectedSegment.point.y ),
@@ -247,7 +276,6 @@ function PrototypoCanvas( opts ) {
 						pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
 						pCanvasInstance.typographicFrame.linearDraggingHelper.opacity = 0.5;
 						pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
-						pCanvasInstance.typographicFrame.linearDraggingHelper.dashArray = [ 8, 8 ];
 					}
 				} else {
 					cursors = {
@@ -381,6 +409,8 @@ function drawTypographicFrame() {
 	this.typographicFrame.low.size.height = 1 / this.zoom;
 	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
 	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
 }
 
 PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
