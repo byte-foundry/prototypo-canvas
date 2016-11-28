@@ -274,6 +274,10 @@ function PrototypoCanvas( opts ) {
 	// bind workerHandlers
 	if ( this.worker ) {
 		this.worker.port.addEventListener('message', function(e) {
+			if (e.data.handler === 'font') {
+				this.emitEvent( 'worker.fontCreated');
+			}
+
 			// the job might have been cancelled
 			if ( !this.currentJob ) {
 				return;
@@ -491,14 +495,9 @@ PrototypoCanvas.prototype.update = function( values ) {
 };
 
 PrototypoCanvas.prototype.getGlyphsProperties = function(properties, callback) {
-	var names = this.subset.map(function(glyph) {
-		return glyph.name;
-	});
-
 	this.enqueue({
 		type: 'getGlyphsProperties',
 		data: {
-			names: names,
 			properties: properties
 		},
 		callback: (typeof callback === 'function' ? callback : undefined)

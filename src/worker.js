@@ -164,12 +164,11 @@ function runWorker(self) {
 			font = fontsMap[templateName];
 			font.resetComponents();
 			translateSubset();
-			var solvingOrders = {};
-			Object.keys( font.glyphMap ).forEach(function(key) {
-				solvingOrders[key] = font.glyphMap[key].solvingOrder;
-			});
 
-			return solvingOrders;
+			return {
+				solvingOrders: null,
+				handler: 'font',
+			};
 		}
 
 		var fontObj = JSON.parse( fontSource );
@@ -184,7 +183,10 @@ function runWorker(self) {
 			solvingOrders[key] = font.glyphMap[key].solvingOrder;
 		});
 
-		return solvingOrders;
+		return {
+			solvingOrders: solvingOrders,
+			handler: 'font',
+		};
 	};
 
 	handlers.update = function( eData ) {
@@ -201,7 +203,7 @@ function runWorker(self) {
 		var result = null;
 
 		if (eData.data) {
-			var names = eData.data.names;
+			var names = font.subset.map(function(glyph) { return glyph.name });
 			var properties = eData.data.properties;
 			result = {};
 

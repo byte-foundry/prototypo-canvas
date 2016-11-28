@@ -2,6 +2,7 @@ import React, {Component} from 'react';
 import prototypo from 'prototypo.js';
 import PrototypoCanvas from './prototypo-canvas.js';
 import forEach from 'lodash/forEach';
+import isEqual from 'lodash/isEqual';
 
 export default class PrototypoCanvasContainer extends Component {
 	constructor(props) {
@@ -14,24 +15,45 @@ export default class PrototypoCanvasContainer extends Component {
 	componentWillReceiveProps(nextProps) {
 		if (this.state.instance !== '') {
 			if (this.state.instance) {
+				const values = {
+					...nextProps.values,
+					altList: nextProps.altList || {},
+				};
+
 				if (nextProps.familyName !== this.props.familyName) {
+					this.props.preLoad()
+					this.setState({
+						loading: true,
+					});
 					this.state.instance.loadFont(nextProps.familyName, nextProps.json, nextProps.db)
 						.then(() => {
 							this.props.setGlyphs(this.state.instance.font.altMap);
 						});
-				}
 
-				if (nextProps.values !== this.props.values || nextProps.altList !== this.props.altList) {
-					const values = {
-						...nextProps.values,
-						altList: nextProps.altList || {},
-					}
+					this.state.instance.addOnceListener('worker.fontCreated', () => {
+						this.props.afterLoad();
+						this.setState({
+							loading: false,
+						});
+						this.forceUpdate();
+					});
+				}
+				else if (
+					(!_.isEqual(this.state.instance.latestValues, {...this.state.instance.latestValues, ...values}))
+					&& !this.state.loading
+				) {
 					this.state.instance.update(values);
 				}
 
 				if (
-					this.state.instance.subset.map(function(glyph) { return String.fromCharCode(glyph.unicode) }).join('')
-					!== this.state.instance.font.normalizeSubset(nextProps.subset).map(function(glyph) { return String.fromCharCode(glyph.unicode) }).join('')
+					this.state.instance.subset
+						.map(function(glyph) {
+							return String.fromCharCode(glyph.unicode)
+						}).join('')
+					!== this.state.instance.font.normalizeSubset(nextProps.subset)
+						.map(function(glyph) {
+							return String.fromCharCode(glyph.unicode)
+						}).join('')
 				) {
 					this.state.instance.subset = nextProps.subset;
 				}
@@ -54,12 +76,17 @@ export default class PrototypoCanvasContainer extends Component {
 					instance: '',
 				});
 
+				this.props.preLoad()
 				PrototypoCanvas.init({
 					canvas: this.refs.canvas,
 					workerUrl: this.props.workerUrl,
 					workerDeps: this.props.workerDeps,
 					jQueryListeners: false,
 				}).then(async (instance) => {
+					instance.addOnceListener('worker.fontCreated', () => {
+						this.props.afterLoad()
+					});
+
 					await instance.loadFont(this.props.familyName, this.props.json, this.props.db);
 					this.props.setGlyphs(instance.font.altMap);
 
@@ -73,8 +100,11 @@ export default class PrototypoCanvasContainer extends Component {
 								'baseSpacingRight',
 								'glyphWidth'
 							],
-							(props) => {
-								this.props.storeProperties(props);
+							(glyphProperties) => {
+								this.props.afterFontComputation({
+									glyphProperties,
+									totalHeight: this.props.values.xHeight + Math.max(this.props.values.capDelta, this.props.values.ascender) - this.props.values.descender
+								});
 							}
 						);
 					});

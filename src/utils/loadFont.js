@@ -54,9 +54,9 @@ module.exports = function loadFont( name, fontSource, db ) {
 					this.worker.port.removeEventListener('message', handler);
 
 					// merge solvingOrders with the source
-					Object.keys( e.data ).forEach(function(key) {
+					Object.keys( e.data.solvingOrders ).forEach(function(key) {
 						if ( fontObj.glyphs[key] ) {
-							fontObj.glyphs[key].solvingOrder = e.data[key];
+							fontObj.glyphs[key].solvingOrder = e.data.solvingOrders[key];
 						}
 					});
 
