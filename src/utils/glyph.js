@@ -13,7 +13,7 @@ function displayComponents( glyph, showNodes ) {
 		var componentHoverColor = '#24d390';
 
 		if (component.multiple) {
-			if (component.name.indexOf('none') !== -1) {
+			if (component.name.indexOf('none') !== -1 && component.anchors[0].anchor) {
 				if (!component.optionPoint) {
 					var point = new paper.Shape.Circle({
 						center: component.anchors[0].anchor,
@@ -144,6 +144,7 @@ function displayGlyph( _glyph ) {
 
 	// make sure the glyph is up-to-update
 	if ( _glyph && this.latestValues ) {
+		prototypo.Utils.updateParameters( this.font, this.latestValues );
 		this.currGlyph.update( this.latestValues );
 	}
 

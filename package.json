@@ -1,6 +1,6 @@
 {
   "name": "prototypo-canvas",
-  "version": "1.14.5",
+  "version": "1.15.0",
   "description": "Prototypo canvas-rendering component",
   "author": "Louis-Rémi <lrbabe@gmail.com>",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "url": "https://github.com/byte-foundry/prototypo-canvas/issues"
   },
   "homepage": "https://github.com/byte-foundry/prototypo-canvas",
-  "main": "src/prototypo-canvas.js",
+  "main": "src/prototypo-canvas.components.jsx",
   "scripts": {
     "gulp": "gulp",
     "help": "gulp --tasks",
@@ -51,6 +51,17 @@
     "wolfy87-eventemitter": "^4.3.0"
   },
   "devDependencies": {
+    "babel-core": "^6.9.0",
+    "babel-eslint": "^4.1.8",
+    "babel-loader": "^6.2.1",
+    "babel-plugin-syntax-async-functions": "^6.8.0",
+    "babel-plugin-transform-class-properties": "^6.9.0",
+    "babel-plugin-transform-object-rest-spread": "^6.8.0",
+    "babel-plugin-transform-regenerator": "^6.9.0",
+    "babel-polyfill": "^6.9.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-react": "^6.5.0",
+    "babel-project-relative-import": "^2.0.0",
     "browser-sync": "^2.11.1",
     "chai": "^3.5.0",
     "elzevir.ptf": "byte-foundry/elzevir.ptf",
