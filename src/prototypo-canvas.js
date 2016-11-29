@@ -41,6 +41,14 @@ function PrototypoCanvas( opts ) {
 	this.isMousedown = false;
 	this.exportingZip = false;
 	this.allowMove = true;
+	this.isShiftPressed = false;
+	this.shiftLock = {
+		deltaX: 0,
+		deltaY: 0,
+		isLocked: false,
+		direction: '',
+		isLineDrawn: false,
+	};
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -48,6 +56,7 @@ function PrototypoCanvas( opts ) {
 		low: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+		linearDraggingHelper: undefined,
 	};
 	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
 	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
@@ -102,6 +111,24 @@ function PrototypoCanvas( opts ) {
 			emitEvent('manualreset', [ contourId, nodeId ]);
 		}
 	});
+
+	this.view.onKeyDown = function(event) {
+		if (event.event.keyCode === 16) {
+			this.isShiftPressed = true;
+		}
+	}
+
+	this.view.onKeyUp = function(event) {
+		if (event.event.keyCode === 16) {
+			this.isShiftPressed = false;
+			pCanvasInstance.shiftLock.isLocked = false;
+			pCanvasInstance.shiftLock.isLineDrawn = false;
+			pCanvasInstance.shiftLock.deltaX = 0;
+			pCanvasInstance.shiftLock.deltaY = 0;
+			pCanvasInstance.shiftLock.direction = '';
+			pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
+		}
+	}
 
 	this.view.onMouseDown = function(event) {
 		if (pCanvasInstance._showNodes) {
@@ -208,10 +235,62 @@ function PrototypoCanvas( opts ) {
 				// change skeleton x, y
 				contourIdx = this.selectedSegment.contourIdx;
 				nodeIdx = this.selectedSegment.nodeIdx;
-				cursors = {
-					[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-					[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-				};
+
+				if (this.isShiftPressed) {
+
+					//drag locking mechanism
+					if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
+						pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
+						pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
+					} else {
+						pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
+						pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
+					}
+					let lockTrigger = 4;
+					let switchDirectionTrigger = 12;
+					if (!pCanvasInstance.shiftLock.isLocked) {
+						if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
+							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+							pCanvasInstance.shiftLock.isLocked = true;
+						}
+					} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
+							pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
+							pCanvasInstance.shiftLock.isLineDrawn = false;
+							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+					}
+
+					// only use the delta according to the direction set
+					cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
+					{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+					} :
+					{
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+					};
+					if (!pCanvasInstance.shiftLock.isLineDrawn) {
+						pCanvasInstance.shiftLock.isLineDrawn = true;
+						// draw helpline
+						pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
+						new paper.Path.Line(
+							new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
+							new paper.Point( this.selectedSegment.point.x - 1, -50000 )
+						) :
+						new paper.Path.Line(
+							new paper.Point( -100000, this.selectedSegment.point.y ),
+							new paper.Point( 100000, this.selectedSegment.point.y )
+						);
+						pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
+						pCanvasInstance.typographicFrame.linearDraggingHelper.opacity = 0.5;
+						pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
+					}
+				} else {
+					cursors = {
+						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+					};
+				}
 				this.changesToConfirm = cursors;
 				return emitEvent('manualchange', [ cursors ]);
 			} else {
@@ -332,7 +411,7 @@ function drawTypographicFrame() {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
 		if (this.latestRafValues) {
-			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+				this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
 			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
 		}
 	}
@@ -342,6 +421,8 @@ function drawTypographicFrame() {
 	this.typographicFrame.low.size.height = 1 / this.zoom;
 	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
 	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
 }
 
 PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
