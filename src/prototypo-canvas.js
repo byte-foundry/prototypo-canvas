@@ -269,7 +269,7 @@ function PrototypoCanvas( opts ) {
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
 					};
-					if (!pCanvasInstance.shiftLock.isLineDrawn) {
+					if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
 						pCanvasInstance.shiftLock.isLineDrawn = true;
 						// draw helpline
 						pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
