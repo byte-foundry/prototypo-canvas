@@ -239,7 +239,7 @@ function PrototypoCanvas( opts ) {
 						pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
 					}
 					let lockTrigger = 2;
-					let switchDirectionTrigger = 6;
+					let switchDirectionTrigger = 9;
 					if (!pCanvasInstance.shiftLock.isLocked) {
 						if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
 							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
