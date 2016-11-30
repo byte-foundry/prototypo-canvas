@@ -2,6 +2,8 @@ var shell = require('./../worker');
 
 var URL = typeof window !== 'undefined' && ( window.URL || window.webkitURL );
 
+var prototypoWorker;
+
 module.exports = function init( opts ) {
 	var constructor = this;
 
@@ -23,24 +25,30 @@ module.exports = function init( opts ) {
 
 	// create the worker
 	return new Promise(function( resolve ) {
-		var worker = opts.worker = new SharedWorker( opts.workerUrl),
-			handler = function initWorker() {
-				worker.port.removeEventListener('message', handler);
-				resolve();
+		if (prototypoWorker) {
+			opts.worker = prototypoWorker
+			resolve();
+		}
+		else {
+			var worker = opts.worker = new SharedWorker( opts.workerUrl),
+				handler = function initWorker() {
+					worker.port.removeEventListener('message', handler);
+					resolve();
+				};
+			prototypoWorker = worker;
+
+			worker.port.onmessage = handler;
+			worker.port.start();
+
+			var data = {
+				exportPort: opts.export || false,
+				deps: Array.isArray( opts.workerDeps ) ?
+					opts.workerDeps :
+					[ opts.workerDeps ]
 			};
-		window.worker = worker;
 
-		worker.port.onmessage = handler;
-		worker.port.start();
-
-		var data = {
-			exportPort: opts.export || false,
-			deps: Array.isArray( opts.workerDeps ) ?
-				opts.workerDeps :
-				[ opts.workerDeps ]
-		};
-
-		worker.port.postMessage( data );
+			worker.port.postMessage( data );
+		}
 	}).then(function() {
 		return new constructor( opts );
 	});

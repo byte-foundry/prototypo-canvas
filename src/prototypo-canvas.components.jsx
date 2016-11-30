@@ -4,12 +4,19 @@ import PrototypoCanvas from './prototypo-canvas.js';
 import forEach from 'lodash/forEach';
 import isEqual from 'lodash/isEqual';
 
+let canvasBackRef;
+let projectBackRef;
+
 export default class PrototypoCanvasContainer extends Component {
 	constructor(props) {
 		super(props);
 		this.state = {};
 		this.wheel = this.wheel.bind(this);
 		this.mouseUp = this.mouseUp.bind(this);
+	}
+
+	componentWillUnmount() {
+		canvasBackRef = this.refs.canvas;
 	}
 
 	componentWillReceiveProps(nextProps) {
@@ -88,6 +95,9 @@ export default class PrototypoCanvasContainer extends Component {
 					});
 
 					await instance.loadFont(this.props.familyName, this.props.json, this.props.db);
+					if (canvasBackRef) {
+						canvasBackRef = undefined;
+					}
 					this.props.setGlyphs(instance.font.altMap);
 
 					instance.addListener('worker.fontLoaded',() => {
@@ -173,7 +183,7 @@ export default class PrototypoCanvasContainer extends Component {
 	}
 
 	resizeCanvas() {
-		if (this.state.instance && this.state.instance !== '') {
+		if (this.state.instance && this.state.instance !== '' && this.refs.canvas) {
 			const oldSize = new prototypo.paper.Size(this.refs.canvas.clientWidth,
 				this.refs.canvas.clientHeight);
 

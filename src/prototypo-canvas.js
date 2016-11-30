@@ -12,6 +12,25 @@ var { drawUIEditor, createUIEditor } = require('./utils/ui-editor');
 var _ = { assign: assign, cloneDeep: cloneDeep, forEach: forEach },
 	paper = prototypo.paper;
 
+var fontsMap;
+var UIEditor;
+
+var confirmCursorsChanges = function(instance, oldCursors) {
+	const newCursors = _.cloneDeep(oldCursors);
+	const createIdentityCursors = function(cursors) {
+		Object.keys(cursors).forEach((key) => {
+			switch (typeof cursors[key]) {
+				case 'number': cursors[key] = 0; break;
+				case 'string': cursors[key] = '0deg'; break;
+				case 'object': cursors[key] = createIdentityCursors(cursors[key]); break;
+			}
+		});
+		return cursors;
+	};
+
+	instance.emitEvent('manualchange', [ createIdentityCursors(newCursors), true ]);
+};
+
 // constructor
 function PrototypoCanvas( opts ) {
 	paper.setup( opts.canvas );
@@ -27,6 +46,7 @@ function PrototypoCanvas( opts ) {
 		glyphrUrl: 'http://www.glyphrstudio.com/online/'
 	}, opts);
 
+	this.scope = paper;
 	this.canvas = opts.canvas;
 	this.view = paper.view;
 	this.view.center = [ 0, 0 ];
@@ -37,7 +57,6 @@ function PrototypoCanvas( opts ) {
 	this._queue = [];
 	this._fill = this.opts.fill;
 	this._showNodes = this.opts.showNodes;
-	this.fontsMap = {};
 	this.isMousedown = false;
 	this.exportingZip = false;
 	this.allowMove = true;
@@ -49,6 +68,13 @@ function PrototypoCanvas( opts ) {
 		direction: '',
 		isLineDrawn: false,
 	};
+
+	if (fontsMap) {
+		this.fontsMap = fontsMap;
+	}
+	else {
+		this.fontsMap = fontsMap = {};
+	}
 
 	this.typographicFrame = {
 		spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -79,23 +105,7 @@ function PrototypoCanvas( opts ) {
 
 	var emitEvent = this.emitEvent.bind(this);
 
-	var confirmCursorsChanges = function(oldCursors) {
-		const newCursors = _.cloneDeep(oldCursors);
-		const createIdentityCursors = function(cursors) {
-			Object.keys(cursors).forEach((key) => {
-				switch (typeof cursors[key]) {
-					case 'number': cursors[key] = 0; break;
-					case 'string': cursors[key] = '0deg'; break;
-					case 'object': cursors[key] = createIdentityCursors(cursors[key]); break;
-				}
-			});
-			return cursors;
-		};
-
-		emitEvent('manualchange', [ createIdentityCursors(newCursors), true ]);
-	};
-
-	var UIEditor = createUIEditor(paper, {
+	UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
 			emitEvent('manualchange', [ cursors ]);
 			if (!UIEditor.changesToConfirm) {
@@ -104,7 +114,7 @@ function PrototypoCanvas( opts ) {
 		},
 		onConfirmChanges() {
 			var cursors = UIEditor.changesToConfirm;
-			confirmCursorsChanges(cursors);
+			confirmCursorsChanges(pCanvasInstance, cursors);
 			delete UIEditor.changesToConfirm;
 		},
 		onResetCursor(contourId, nodeId) {
@@ -112,6 +122,164 @@ function PrototypoCanvas( opts ) {
 		}
 	});
 
+	this.setupEvents( pCanvasInstance );
+
+	// this.grid = new Grid( paper );
+
+	// bind workerHandlers
+	if ( this.worker ) {
+		this.worker.port.addEventListener('message', function(e) {
+			if (e.data.handler === 'font') {
+				this.emitEvent( 'worker.fontCreated');
+			}
+
+			// the job might have been cancelled
+			if ( !this.currentJob ) {
+				return;
+			}
+
+			if ( this.currentJob.callback ) {
+				this.currentJob.callback( e.data );
+
+			// default callback for buffers: use it as a font
+			} else if ( e.data instanceof ArrayBuffer ) {
+				try {
+					this.font.addToFonts( e.data );
+					this.emitEvent( 'worker.fontLoaded');
+
+				} catch ( error ) {
+					this.emitEvent( 'fonterror', [ error ] );
+				}
+			}
+
+			this.currentJob = false;
+			this.dequeue();
+
+		}.bind(this));
+	}
+
+	// setup raf loop
+	var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+	var updateLoop = () => {
+		raf(updateLoop);
+
+		if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
+			this.font.update( this.latestRafValues, [ this.currGlyph ] );
+			this.view.update();
+			drawTypographicFrame.bind(this)();
+			delete this.latestRafValues;
+		}
+
+		if (this.prevGlyph !== this.currGlyph) {
+			this.prevGlyph = this.currGlyph;
+
+			delete UIEditor.selection;
+		}
+
+		drawTypographicFrame.bind(this)();
+		drawUIEditor(paper, !this._showNodes, UIEditor);
+	};
+	updateLoop();
+}
+
+function drawTypographicFrame() {
+	if (this.currGlyph && this.currGlyph.ot.advanceWidth) {
+		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
+		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
+		if (this.latestRafValues) {
+				this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+		}
+	}
+
+	this.typographicFrame.spacingLeft.strokeWidth = 1 / this.zoom;
+	this.typographicFrame.spacingRight.strokeWidth = 1 / this.zoom;
+	this.typographicFrame.low.size.height = 1 / this.zoom;
+	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
+	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
+	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
+}
+
+PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
+PrototypoCanvas.init = init;
+PrototypoCanvas.prototype.loadFont = loadFont;
+_.assign( PrototypoCanvas.prototype, mouseHandlers );
+
+Object.defineProperties( PrototypoCanvas.prototype, {
+	zoom: {
+		get: function() {
+			return this.view.zoom;
+		},
+		set: function( zoom ) {
+			this.view.zoom = zoom;
+			// this.grid.zoom = zoom;
+		}
+	},
+	fill: {
+		get: function() {
+			return this._fill;
+		},
+		set: function( bool ) {
+			this._fill = bool;
+			this.displayGlyph();
+		}
+	},
+	showNodes: {
+		get: function() {
+			return this._showNodes;
+		},
+		set: function( bool ) {
+			this._showNodes = bool;
+			this.displayGlyph();
+		}
+	},
+	showCoords: {
+		get: function() {
+			return paper.settings.drawCoords;
+		},
+		set: function( bool ) {
+			paper.settings.drawCoords = bool;
+			this.displayGlyph();
+		}
+	},
+	subset: {
+		get: function() {
+			return this.font.subset;
+		},
+		set: function( set ) {
+			this.enqueue({
+				type: 'subset',
+				data: set
+			});
+
+			this.font.subset = set;
+		}
+	}
+});
+
+PrototypoCanvas.prototype.displayGlyph = glyph.displayGlyph;
+PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
+PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
+PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
+
+PrototypoCanvas.prototype.displayChar = function( code ) {
+	this.latestChar = code;
+	this.displayGlyph( typeof code === 'string' ?
+		this.font.charMap[ code.charCodeAt(0) ] : code
+	);
+};
+
+PrototypoCanvas.prototype.setupCanvas = function( canvas ) {
+	if (canvas !== this.view._element) {
+		this.scope.setup(canvas);
+		this.view = this.scope.view;
+		this.setupEvents( this );
+	}
+}
+
+PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
+	var emitEvent = this.emitEvent.bind(this);
 	this.view.onKeyDown = function(event) {
 		if (event.event.keyCode === 16) {
 			this.isShiftPressed = true;
@@ -340,159 +508,14 @@ function PrototypoCanvas( opts ) {
 
 	this.view.onMouseUp = function() {
 		if (this.changesToConfirm) {
-			confirmCursorsChanges(this.changesToConfirm);
+			confirmCursorsChanges(pCanvasInstance, this.changesToConfirm);
 			delete this.changesToConfirm;
 		}
 		pCanvasInstance.prevPos = undefined;
 		this.selectedHandle = null;
 		this.selectedSegment = null;
 	};
-
-	// this.grid = new Grid( paper );
-
-	// bind workerHandlers
-	if ( this.worker ) {
-		this.worker.port.addEventListener('message', function(e) {
-			if (e.data.handler === 'font') {
-				this.emitEvent( 'worker.fontCreated');
-			}
-
-			// the job might have been cancelled
-			if ( !this.currentJob ) {
-				return;
-			}
-
-			if ( this.currentJob.callback ) {
-				this.currentJob.callback( e.data );
-
-			// default callback for buffers: use it as a font
-			} else if ( e.data instanceof ArrayBuffer ) {
-				try {
-					this.font.addToFonts( e.data );
-					this.emitEvent( 'worker.fontLoaded');
-
-				} catch ( error ) {
-					this.emitEvent( 'fonterror', [ error ] );
-				}
-			}
-
-			this.currentJob = false;
-			this.dequeue();
-
-		}.bind(this));
-	}
-
-	// setup raf loop
-	var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
-	var updateLoop = () => {
-		raf(updateLoop);
-
-		if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
-			this.font.update( this.latestRafValues, [ this.currGlyph ] );
-			this.view.update();
-			drawTypographicFrame.bind(this)();
-			delete this.latestRafValues;
-		}
-
-		if (this.prevGlyph !== this.currGlyph) {
-			this.prevGlyph = this.currGlyph;
-
-			delete UIEditor.selection;
-		}
-
-		drawTypographicFrame.bind(this)();
-		drawUIEditor(paper, !this._showNodes, UIEditor);
-	};
-	updateLoop();
 }
-
-function drawTypographicFrame() {
-	if (this.currGlyph && this.currGlyph.ot.advanceWidth) {
-		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
-		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
-		if (this.latestRafValues) {
-				this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
-			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
-		}
-	}
-
-	this.typographicFrame.spacingLeft.strokeWidth = 1 / this.zoom;
-	this.typographicFrame.spacingRight.strokeWidth = 1 / this.zoom;
-	this.typographicFrame.low.size.height = 1 / this.zoom;
-	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
-	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
-	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
-	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
-}
-
-PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
-PrototypoCanvas.init = init;
-PrototypoCanvas.prototype.loadFont = loadFont;
-_.assign( PrototypoCanvas.prototype, mouseHandlers );
-
-Object.defineProperties( PrototypoCanvas.prototype, {
-	zoom: {
-		get: function() {
-			return this.view.zoom;
-		},
-		set: function( zoom ) {
-			this.view.zoom = zoom;
-			// this.grid.zoom = zoom;
-		}
-	},
-	fill: {
-		get: function() {
-			return this._fill;
-		},
-		set: function( bool ) {
-			this._fill = bool;
-			this.displayGlyph();
-		}
-	},
-	showNodes: {
-		get: function() {
-			return this._showNodes;
-		},
-		set: function( bool ) {
-			this._showNodes = bool;
-			this.displayGlyph();
-		}
-	},
-	showCoords: {
-		get: function() {
-			return paper.settings.drawCoords;
-		},
-		set: function( bool ) {
-			paper.settings.drawCoords = bool;
-			this.displayGlyph();
-		}
-	},
-	subset: {
-		get: function() {
-			return this.font.subset;
-		},
-		set: function( set ) {
-			this.enqueue({
-				type: 'subset',
-				data: set
-			});
-
-			this.font.subset = set;
-		}
-	}
-});
-
-PrototypoCanvas.prototype.displayGlyph = glyph.displayGlyph;
-PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
-PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
-PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
-
-PrototypoCanvas.prototype.displayChar = function( code ) {
-	this.latestChar = code;
-	this.displayGlyph( typeof code === 'string' ?
-		this.font.charMap[ code.charCodeAt(0) ] : code
-	);
-};
 
 // overwrite the appearance of #selected items in paper.js
 paper.PaperScope.prototype.Path.prototype._drawSelected = glyph._drawSelected;

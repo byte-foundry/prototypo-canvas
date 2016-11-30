@@ -45,7 +45,7 @@
     "jquery.wheel.js": "0.2.0",
     "normalize.css": "^3.0.3",
     "pepjs": "^0.4.1",
-    "prototypo.js": "~1.13.0",
+    "prototypo.js": "~1.15.0",
     "whatwg-fetch": "^0.11.0",
     "deptree": "^0.1.0",
     "wolfy87-eventemitter": "^4.3.0"

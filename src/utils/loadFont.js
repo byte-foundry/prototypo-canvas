@@ -22,6 +22,10 @@ module.exports = function loadFont( name, fontSource, db ) {
 	// TODO: memoizing should have a limited size!
 	if ( name in this.fontsMap ) {
 		this.font = this.fontsMap[name];
+		if (this.font.project !== this.project) {
+			this.font._setProject(this.project);
+			this.project.activeLayer.addChild(this.font);
+		}
 		this.font.resetComponents();
 		translateGlyph( this );
 		this.worker.port.postMessage({
