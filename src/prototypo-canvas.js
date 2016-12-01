@@ -105,6 +105,10 @@ function PrototypoCanvas( opts ) {
 
 	var emitEvent = this.emitEvent.bind(this);
 
+	if (UIEditor) {
+		UIEditor.remove();
+	}
+
 	UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
 			emitEvent('manualchange', [ cursors ]);

@@ -112,6 +112,11 @@ function createUIEditor(paper, options) {
 		UIEditor.onResetCursor(UIEditor.selection.contourIdx, UIEditor.selection.nodeIdx);
 	}
 
+	UIEditor.remove = function() {
+		UIEditor.distributionHandle.remove();
+		UIEditor.directionHandle.remove();
+		UIEditor.resetHandle.remove();
+	}
 	UIEditor.distributionHandle = distributionHandle;
 	UIEditor.directionHandle = directionHandle;
 	UIEditor.resetHandle = resetHandle;
