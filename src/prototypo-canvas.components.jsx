@@ -28,6 +28,28 @@ export default class PrototypoCanvasContainer extends Component {
 					altList: nextProps.altList || {},
 				};
 
+				if (nextProps.exportTag) {
+					this.props.preExport();
+					this.state.instance.download(
+						nextProps.afterExport,
+						nextProps.exportName,
+						nextProps.exportMerged,
+						nextProps.exportValues,
+						nextProps.exportEmail
+					)
+				}
+
+				if (nextProps.exportGlyphrTag) {
+					this.props.preExportGlyphr();
+					this.state.instance.openInGlyphr(
+						nextProps.afterExportGlyphr,
+						nextProps.exportName,
+						nextProps.exportMerged,
+						nextProps.exportValues,
+						nextProps.exportEmail
+					)
+				}
+
 				if (nextProps.familyName !== this.props.familyName) {
 					this.props.preLoad()
 					this.setState({
