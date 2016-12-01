@@ -18,6 +18,7 @@ export default class PrototypoCanvasContainer extends Component {
 
 	componentWillUnmount() {
 		canvasBackRef = this.refs.canvas;
+		this.state.instance.stopRaf();
 	}
 
 	componentWillReceiveProps(nextProps) {
