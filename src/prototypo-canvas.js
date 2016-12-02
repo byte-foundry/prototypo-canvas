@@ -61,6 +61,7 @@ function PrototypoCanvas( opts ) {
 	this.exportingZip = false;
 	this.allowMove = true;
 	this.isShiftPressed = false;
+	this.glyphPoints = [];
 	this.shiftLock = {
 		deltaX: 0,
 		deltaY: 0,
@@ -350,6 +351,14 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 
 				UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
 
+
+				skeletons.forEach((item) => {
+					item.segments.forEach((segment) => {
+						if (segment !== this.selectedSegment) {
+							pCanvasInstance.glyphPoints.push({ x: segment.point.x, y: segment.point.y });
+						}
+					});
+				});
 				return;
 			}
 		}
@@ -514,6 +523,7 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 		pCanvasInstance.prevPos = undefined;
 		this.selectedHandle = null;
 		this.selectedSegment = null;
+		pCanvasInstance.glyphPoints = [];
 	};
 }
 
