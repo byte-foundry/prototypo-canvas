@@ -366,6 +366,19 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 						hitResult.segment.selected = true;
 					});
 				}
+				else if (hitResult.segment.expandedFrom) {
+					skeletons.forEach((item) => {
+						_.forEach(item.expandedTo, function(expanded) {
+							expanded.selected = false;
+						});
+						item.selected = false;
+					});
+
+					_.forEach(hitResult.segment.expandedFrom.expandedTo, function(expanded) {
+						expanded.selected = true;
+						hitResult.segment.selected = true;
+					});
+				}
 
 				if (hitResult.type.startsWith('handle')) {
 					this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
