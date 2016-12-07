@@ -69,6 +69,13 @@ function PrototypoCanvas( opts ) {
 		direction: '',
 		isLineDrawn: false,
 	};
+	this.snapping = {
+		isSnapped: false,
+		axis: '',
+		deltaX: 0,
+		deltaY: 0,
+		snappedTo: undefined,
+	};
 
 	if (fontsMap) {
 		this.fontsMap = fontsMap;
@@ -84,6 +91,7 @@ function PrototypoCanvas( opts ) {
 		xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		linearDraggingHelper: undefined,
+		snappingHelper: undefined,
 	};
 	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
 	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
@@ -199,6 +207,7 @@ function drawTypographicFrame() {
 	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
 	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
 	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
+	this.typographicFrame.snappingHelper ? this.typographicFrame.snappingHelper.strokeWidth = 2 / this.zoom : null;
 	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
 }
 
@@ -459,7 +468,6 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 							new paper.Point( 100000, this.selectedSegment.point.y )
 						);
 						pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
-						pCanvasInstance.typographicFrame.linearDraggingHelper.opacity = 0.5;
 						pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
 					}
 				} else {
@@ -467,6 +475,96 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
 					};
+				}
+				//Snapping mechanism
+				let snappingTrigger = 10;
+				let unSnappingTrigger = 15;
+				let xDirection = (event.delta.x > 0) ? 'right' : 'left';
+				let yDirection = (event.delta.y < 0) ? 'top' : 'bottom';
+				if (!pCanvasInstance.snapping.isSnapped) {
+					//Not yet snapped, scan all nodes to get a match
+					for (let glyphPoint of pCanvasInstance.glyphPoints) {
+						if (Math.abs(this.selectedSegment.point.x - glyphPoint.x) < snappingTrigger) {
+							//Snapped on glyphpoint's X, move node on X and snap it
+							cursors = {
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: glyphPoint.x - this.selectedSegment.point.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+							};
+							pCanvasInstance.snapping.isSnapped = true;
+							pCanvasInstance.snapping.axis = 'x';
+							pCanvasInstance.shiftLock.isLineDrawn = true;
+							pCanvasInstance.snapping.snappedTo = glyphPoint;
+							// draw helpline
+							pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+								new paper.Point( this.selectedSegment.point.x - 1 , this.selectedSegment.point.y ),
+								new paper.Point( glyphPoint.x, glyphPoint.y )
+							);
+							pCanvasInstance.typographicFrame.snappingHelper.strokeColor = '#FF4AFF';
+							pCanvasInstance.typographicFrame.snappingHelper.applyMatrix = false;
+							console.log('Snap (x)');
+							break;
+						}
+						if (Math.abs(this.selectedSegment.point.y - glyphPoint.y) < snappingTrigger) {
+							//Snapped on glyphpoint's Y, move node on Y and snap it
+							cursors = {
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: glyphPoint.y - this.selectedSegment.point.y,
+							};
+							pCanvasInstance.snapping.isSnapped = true;
+							pCanvasInstance.snapping.axis = 'y';
+							pCanvasInstance.snapping.snappedTo = glyphPoint;
+							// draw helpline
+							pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+								new paper.Point( this.selectedSegment.point.x - 1 , this.selectedSegment.point.y ),
+								new paper.Point( glyphPoint.x, glyphPoint.y )
+							);
+							pCanvasInstance.typographicFrame.snappingHelper.strokeColor = '#FF4AFF';
+							pCanvasInstance.typographicFrame.snappingHelper.opacity = 0.5;
+							pCanvasInstance.typographicFrame.snappingHelper.applyMatrix = false;
+							console.log('Snap (y)');
+							break;
+						}
+					}
+				} else {
+					//Snapped, engage the unsnapping loop
+					pCanvasInstance.snapping.deltaX += event.delta.x;
+					pCanvasInstance.snapping.deltaY += event.delta.y;
+					if ( ( pCanvasInstance.snapping.axis === 'y' && Math.abs(pCanvasInstance.snapping.deltaY) > unSnappingTrigger )  ||
+						( pCanvasInstance.snapping.axis === 'x' && Math.abs(pCanvasInstance.snapping.deltaX) > unSnappingTrigger ) ) {
+						// Reached the trigger, unsnap it
+						cursors = pCanvasInstance.snapping.axis === 'y' ?
+						{
+							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: yDirection === 'bottom' ?
+																														-unSnappingTrigger :
+																														unSnappingTrigger,
+						} :
+						{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: xDirection === 'right' ?
+																															unSnappingTrigger :
+																															-unSnappingTrigger,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+						};
+						pCanvasInstance.snapping.deltaX = 0;
+						pCanvasInstance.snapping.deltaY = 0;
+						pCanvasInstance.snapping.isSnapped = false;
+						pCanvasInstance.snapping.axis = '';
+						pCanvasInstance.snapping.snappedTo = undefined;
+						pCanvasInstance.typographicFrame.snappingHelper.remove();
+					} else {
+						//block the snapped axis, move freely on the other one
+						pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x = this.selectedSegment.point.x;
+						pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = this.selectedSegment.point.y;
+						cursors = pCanvasInstance.snapping.axis === 'y' ?
+						{
+							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+						} :
+						{
+							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+						};
+					}
 				}
 				this.changesToConfirm = cursors;
 				return emitEvent('manualchange', [ cursors ]);
@@ -524,6 +622,12 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 		this.selectedHandle = null;
 		this.selectedSegment = null;
 		pCanvasInstance.glyphPoints = [];
+		pCanvasInstance.snapping.deltaX = 0;
+		pCanvasInstance.snapping.deltaY = 0;
+		pCanvasInstance.snapping.isSnapped = false;
+		pCanvasInstance.snapping.axis = '';
+		pCanvasInstance.snapping.snappedTo = undefined;
+		pCanvasInstance.typographicFrame.snappingHelper ? pCanvasInstance.typographicFrame.snappingHelper.remove() : null;
 	};
 }
 
