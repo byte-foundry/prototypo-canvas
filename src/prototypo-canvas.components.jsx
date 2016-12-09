@@ -194,10 +194,28 @@ export default class PrototypoCanvasContainer extends Component {
 	}
 
 	componentDidUpdate() {
-		if (this.state.instance && this.state.instance !== '' && this.state.instance.currGlyph) {
-			this.changeFontInstanceValues();
-			this.resizeCanvas();
-			this.state.instance.displayChar(this.props.selected);
+		if (!this.alreadyRafed) {
+			const raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
+			this.alreadyRafed = raf(() => {
+				if (this.state.instance
+					&& this.state.instance !== ''
+					&& this.state.instance.currGlyph
+					&& this.refs.canvas) {
+					const width = this.refs.container.clientWidth;
+					const height = this.refs.container.clientHeight;
+					const canvasWidth = this.refs.canvas.clientWidth;
+					const canvasHeight = this.refs.canvas.clientHeight;
+
+					raf(() => {
+						this.refs.canvas.width = width;
+						this.refs.canvas.height = height;
+						this.changeFontInstanceValues();
+						this.resizeCanvas(width, height, canvasWidth, canvasHeight);
+						this.state.instance.displayChar(this.props.selected);
+					});
+				}
+				this.alreadyRafed = undefined;
+			});
 		}
 	}
 
@@ -213,37 +231,32 @@ export default class PrototypoCanvasContainer extends Component {
 		this.state.instance.fill = !this.props.uiOutline;
 	}
 
-	resizeCanvas() {
-		if (this.state.instance && this.state.instance !== '' && this.refs.canvas) {
-			const oldSize = new prototypo.paper.Size(this.refs.canvas.clientWidth,
-				this.refs.canvas.clientHeight);
+	resizeCanvas(width, height, canvasWidth, canvasHeight) {
+		const oldSize = new prototypo.paper.Size(canvasWidth,
+			canvasHeight);
 
-			if (oldSize.width && oldSize.height) {
-				const centerClone = this.state.instance.view.center.clone();
-				const center = new prototypo.paper.Point(
-					centerClone.x,
-					-centerClone.y
-				);
-				const glyphCenter = this.state.instance.currGlyph.getPosition();
+		if (oldSize.width && oldSize.height) {
+			const centerClone = this.state.instance.view.center.clone();
+			const center = new prototypo.paper.Point(
+				centerClone.x,
+				-centerClone.y
+			);
+			const glyphCenter = this.state.instance.currGlyph.getPosition();
 
-				const oldGlyphRelativePos = glyphCenter.subtract(center);
-				const newSize = new prototypo.paper.Size(
-					this.refs.container.clientWidth, this.refs.container.clientHeight);
-				const ratio = newSize.divide(oldSize);
+			const oldGlyphRelativePos = glyphCenter.subtract(center);
+			const newSize = new prototypo.paper.Size(
+				width, height);
+			const ratio = newSize.divide(oldSize);
 
-				const newDistance = new prototypo.paper.Point(oldGlyphRelativePos.x * ratio.width, oldGlyphRelativePos.y * ratio.height);
-				const newCenterPosNotTransformed = glyphCenter.subtract(newDistance);
-				const newCenterPos = new prototypo.paper.Point(
-					newCenterPosNotTransformed.x,
-					-newCenterPosNotTransformed.y
-				);
-			}
-
-			this.refs.canvas.width = this.refs.container.clientWidth;
-			this.refs.canvas.height = this.refs.container.clientHeight;
-			this.state.instance.view.viewSize = [this.refs.container.clientWidth, this.refs.container.clientHeight];
-			this.state.instance.view.update();
+			const newDistance = new prototypo.paper.Point(oldGlyphRelativePos.x * ratio.width, oldGlyphRelativePos.y * ratio.height);
+			const newCenterPosNotTransformed = glyphCenter.subtract(newDistance);
+			const newCenterPos = new prototypo.paper.Point(
+				newCenterPosNotTransformed.x,
+				-newCenterPosNotTransformed.y
+			);
 		}
+
+		this.state.instance.view.viewSize = [width, height];
 	}
 
 	render() {
@@ -257,3 +270,5 @@ export default class PrototypoCanvasContainer extends Component {
 		)
 	}
 };
+
+export {PrototypoCanvas};

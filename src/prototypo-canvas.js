@@ -175,12 +175,12 @@ function PrototypoCanvas( opts ) {
 	var updateLoop = () => {
 		this.rafId = raf(updateLoop);
 
-		if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
+			/*if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
 			this.font.update( this.latestRafValues, [ this.currGlyph ] );
 			this.view.update();
 			drawTypographicFrame.bind(this)();
 			delete this.latestRafValues;
-		}
+		}*/
 
 		if (this.prevGlyph !== this.currGlyph) {
 			this.prevGlyph = this.currGlyph;
@@ -198,9 +198,9 @@ function drawTypographicFrame() {
 	if (this.currGlyph && this.currGlyph.ot.advanceWidth) {
 		var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 		this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
-		if (this.latestRafValues) {
-				this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
-			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+		if (this.latestValues) {
+			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestValues.xHeight);
+			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestValues.xHeight + this.latestValues.capDelta);
 		}
 	}
 
@@ -239,7 +239,6 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		},
 		set: function( bool ) {
 			this._fill = bool;
-			this.displayGlyph();
 		}
 	},
 	showNodes: {
@@ -248,7 +247,6 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		},
 		set: function( bool ) {
 			this._showNodes = bool;
-			this.displayGlyph();
 		}
 	},
 	showCoords: {
@@ -257,7 +255,6 @@ Object.defineProperties( PrototypoCanvas.prototype, {
 		},
 		set: function( bool ) {
 			paper.settings.drawCoords = bool;
-			this.displayGlyph();
 		}
 	},
 	subset: {
