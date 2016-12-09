@@ -1,5 +1,4 @@
 var cloneDeep		= require('lodash/cloneDeep');
-var _ = { cloneDeep: cloneDeep };
 // switch the current glyph with one that has the same name
 // in the next font, or one with the same unicode, or .undef
 function translateGlyph( self ) {

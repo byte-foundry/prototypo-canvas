@@ -28,8 +28,7 @@ module.exports = function init( opts ) {
 		if (prototypoWorker) {
 			opts.worker = prototypoWorker
 			resolve();
-		}
-		else {
+		} else {
 			var worker = opts.worker = new SharedWorker( opts.workerUrl),
 				handler = function initWorker() {
 					worker.port.removeEventListener('message', handler);
