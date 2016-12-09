@@ -254,6 +254,9 @@ export default class PrototypoCanvasContainer extends Component {
 				newCenterPosNotTransformed.x,
 				-newCenterPosNotTransformed.y
 			);
+			if (newCenterPos.x !== center.x || newCenterPos.y !== -center.y) {
+				this.props.resetView(newCenterPos.x, newCenterPos.y);
+			}
 		}
 
 		this.state.instance.view.viewSize = [width, height];
