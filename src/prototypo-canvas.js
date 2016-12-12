@@ -569,7 +569,7 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
 							};
 							pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
-								new paper.Point( this.selectedSegment.point.x - 1 , this.selectedSegment.point.y ),
+								new paper.Point( this.selectedSegment.point.x + pCanvasInstance.snapping.snappedTo.x - this.selectedSegment.point.x, this.selectedSegment.point.y - event.delta.y),
 								new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
 							);
 						} else {
@@ -578,7 +578,7 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y,
 							};
 							pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
-								new paper.Point( this.selectedSegment.point.x - 1 , this.selectedSegment.point.y ),
+								new paper.Point( this.selectedSegment.point.x + event.delta.x, this.selectedSegment.point.y + pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y),
 								new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
 							);
 						}
@@ -590,8 +590,12 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 						sendManualChanges(cursors);
 						break;
 					case 'snapped':
-						pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x = this.selectedSegment.point.x;
-						pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = this.selectedSegment.point.y;
+						if (pCanvasInstance.snapping.axis === 'y') {
+							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x = this.selectedSegment.point.x + event.delta.x;
+						}
+						if (pCanvasInstance.snapping.axis === 'x') {
+							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = this.selectedSegment.point.y - event.delta.y;
+						}
 						cursors = pCanvasInstance.snapping.axis === 'y' ?
 						{
 							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
