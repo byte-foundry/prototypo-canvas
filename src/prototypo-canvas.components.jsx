@@ -124,6 +124,8 @@ export default class PrototypoCanvasContainer extends Component {
 					}
 					this.props.setGlyphs(instance.font.altMap);
 
+					window.worker = instance.worker;
+
 					instance.addListener('worker.fontLoaded',() => {
 						instance.getGlyphsProperties(
 							[
