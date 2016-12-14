@@ -113,6 +113,10 @@ function PrototypoCanvas( opts ) {
 
 	var emitEvent = this.emitEvent.bind(this);
 
+	if (UIEditor) {
+		UIEditor.remove();
+	}
+
 	UIEditor = createUIEditor(paper, {
 		onCursorsChanged(cursors) {
 			emitEvent('manualchange', [ cursors ]);
@@ -169,7 +173,7 @@ function PrototypoCanvas( opts ) {
 	// setup raf loop
 	var raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
 	var updateLoop = () => {
-		raf(updateLoop);
+		this.rafId = raf(updateLoop);
 
 		if (this.latestRafValues && this.currGlyph && !this.exportingZip) {
 			this.font.update( this.latestRafValues, [ this.currGlyph ] );
@@ -271,6 +275,13 @@ PrototypoCanvas.prototype.displayGlyph = glyph.displayGlyph;
 PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
 PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
 PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
+
+PrototypoCanvas.prototype.stopRaf = function() {
+	if (this.rafId) {
+		var cancelRaf = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
+		cancelRaf(this.rafId);
+	}
+};
 
 PrototypoCanvas.prototype.displayChar = function( code ) {
 	this.latestChar = code;

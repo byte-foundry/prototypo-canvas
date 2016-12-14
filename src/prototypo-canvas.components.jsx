@@ -13,10 +13,12 @@ export default class PrototypoCanvasContainer extends Component {
 		this.state = {};
 		this.wheel = this.wheel.bind(this);
 		this.mouseUp = this.mouseUp.bind(this);
+		this.reset = this.reset.bind(this);
 	}
 
 	componentWillUnmount() {
 		canvasBackRef = this.refs.canvas;
+		this.state.instance.stopRaf();
 	}
 
 	componentWillReceiveProps(nextProps) {
@@ -26,6 +28,28 @@ export default class PrototypoCanvasContainer extends Component {
 					...nextProps.values,
 					altList: nextProps.altList || {},
 				};
+
+				if (nextProps.exportTag) {
+					this.props.preExport();
+					this.state.instance.download(
+						nextProps.afterExport,
+						nextProps.exportName,
+						nextProps.exportMerged,
+						nextProps.exportValues,
+						nextProps.exportEmail
+					)
+				}
+
+				if (nextProps.exportGlyphrTag) {
+					this.props.preExportGlyphr();
+					this.state.instance.openInGlyphr(
+						nextProps.afterExportGlyphr,
+						nextProps.exportName,
+						nextProps.exportMerged,
+						nextProps.exportValues,
+						nextProps.exportEmail
+					)
+				}
 
 				if (nextProps.familyName !== this.props.familyName) {
 					this.props.preLoad()
@@ -162,6 +186,13 @@ export default class PrototypoCanvasContainer extends Component {
 		this.props.wheel(this.state.instance.zoom, this.state.instance.view.center);
 	}
 
+	reset() {
+		this.props.resetView(
+			this.state.instance.currGlyph.bounds.center.x,
+			-this.state.instance.currGlyph.bounds.center.y,
+		);
+	}
+
 	componentDidUpdate() {
 		if (this.state.instance && this.state.instance !== '' && this.state.instance.currGlyph) {
 			this.changeFontInstanceValues();
@@ -219,7 +250,7 @@ export default class PrototypoCanvasContainer extends Component {
 		const overlay = (!this.state.instance || this.state.instance === '') || true ? <div className="prototypo-canvas-overlay"></div> : false;
 
 		return (
-			<div className="prototypo-canvas-container" ref="container">
+			<div className="prototypo-canvas-container" ref="container" onDoubleClick={this.reset}>
 				<canvas ref="canvas"></canvas>
 				{overlay}
 			</div>
