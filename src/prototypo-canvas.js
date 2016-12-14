@@ -304,6 +304,15 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 			pCanvasInstance.shiftLock.deltaY = 0;
 			pCanvasInstance.shiftLock.direction = '';
 			pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
+			if (pCanvasInstance.snapping.isLineDrawn) {
+				//Unsnap without moving the cursor and remove helpine when shift is released
+				pCanvasInstance.snapping.deltaX = 0;
+				pCanvasInstance.snapping.deltaY = 0;
+				pCanvasInstance.snapping.isSnapped = false;
+				pCanvasInstance.snapping.axis = '';
+				pCanvasInstance.snapping.snappedTo = undefined;
+				pCanvasInstance.typographicFrame.snappingHelper.remove();
+			}
 		}
 	}
 
@@ -382,10 +391,10 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 		var cursors;
 		var change = '';
 		var skeletonChange = '';
-		let snappingTrigger = 10;
-		let unSnappingTrigger = 15;
-		let lockTrigger = 4;
-		let switchDirectionTrigger = 12;
+		let snappingTrigger = 10 / pCanvasInstance.zoom;
+		let unSnappingTrigger = 15 / pCanvasInstance.zoom;
+		let lockTrigger = 4 / pCanvasInstance.zoom;
+		let switchDirectionTrigger = 12 / pCanvasInstance.zoom;
 		let xDirection = (event.delta.x > 0) ? 'right' : 'left';
 		let yDirection = (event.delta.y < 0) ? 'top' : 'bottom';
 
@@ -402,9 +411,6 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 				// change skeleton x, y
 				change = 'skeleton';
 
-				if (this.isShiftPressed) {
-					skeletonChange = 'shiftlock';
-				}
 				//Snapping mechanism
 				if (!pCanvasInstance.snapping.isSnapped) {
 					//Not yet snapped, scan all nodes to get a match
@@ -515,53 +521,6 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 				break;
 			case 'skeleton':
 				switch (skeletonChange) {
-					case 'shiftlock':
-						if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
-							pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
-							pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
-						} else {
-							pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
-							pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
-						}
-						if (!pCanvasInstance.shiftLock.isLocked) {
-							if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
-								pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
-								pCanvasInstance.shiftLock.isLocked = true;
-							}
-						} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
-								pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
-								pCanvasInstance.shiftLock.isLineDrawn = false;
-								pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
-						}
-
-						// only use the delta according to the direction set
-						cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
-						{
-							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
-							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-						} :
-						{
-							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
-						};
-						if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
-							pCanvasInstance.shiftLock.isLineDrawn = true;
-							// draw helpline
-							pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
-							new paper.Path.Line(
-								new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
-								new paper.Point( this.selectedSegment.point.x - 1, -50000 )
-							) :
-							new paper.Path.Line(
-								new paper.Point( -100000, this.selectedSegment.point.y ),
-								new paper.Point( 100000, this.selectedSegment.point.y )
-							);
-							pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
-							pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
-						}
-						this.changesToConfirm = cursors;
-						sendManualChanges(cursors);
-						break;
 					case 'gotSnapped':
 						if (pCanvasInstance.snapping.axis === 'x') {
 							cursors = {
@@ -586,15 +545,21 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 						pCanvasInstance.typographicFrame.snappingHelper.opacity = 0.5;
 						pCanvasInstance.typographicFrame.snappingHelper.applyMatrix = false;
 						pCanvasInstance.shiftLock.isLineDrawn = true;
-						this.changesToConfirm = cursors;
-						sendManualChanges(cursors);
+						if (!this.isShiftPressed) {
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+						}
 						break;
 					case 'snapped':
 						if (pCanvasInstance.snapping.axis === 'y') {
-							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x = this.selectedSegment.point.x + event.delta.x;
+							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x =  !pCanvasInstance.shiftLock.isLocked ?
+							this.selectedSegment.point.x + event.delta.x :
+							this.selectedSegment.point.x;
 						}
 						if (pCanvasInstance.snapping.axis === 'x') {
-							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = this.selectedSegment.point.y - event.delta.y;
+							pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = !pCanvasInstance.shiftLock.isLocked ?
+							this.selectedSegment.point.y - event.delta.y :
+							this.selectedSegment.point.y;
 						}
 						cursors = pCanvasInstance.snapping.axis === 'y' ?
 						{
@@ -605,8 +570,10 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
 							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
 						};
-						this.changesToConfirm = cursors;
-						sendManualChanges(cursors);
+						if (!this.isShiftPressed) {
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+						}
 						break;
 					case 'unSnapped':
 						cursors = pCanvasInstance.snapping.axis === 'y' ?
@@ -628,23 +595,73 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 						pCanvasInstance.snapping.axis = '';
 						pCanvasInstance.snapping.snappedTo = undefined;
 						pCanvasInstance.typographicFrame.snappingHelper.remove();
-						this.changesToConfirm = cursors;
-						sendManualChanges(cursors);
+						if (!this.isShiftPressed) {
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+						}
 						break;
 					default:
 						cursors = {
 							[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
 							[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
 						};
-						this.changesToConfirm = cursors;
-						sendManualChanges(cursors);
+						if (!this.isShiftPressed) {
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+						}
 						break;
 				}
 				break;
 			default:
 				break;
 		}
+		if (this.isShiftPressed) {
+			if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
+				pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
+				pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
+			} else {
+				pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
+				pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
+			}
+			if (!pCanvasInstance.shiftLock.isLocked) {
+				if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
+					pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+					pCanvasInstance.shiftLock.isLocked = true;
+				}
+			} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
+					pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
+					pCanvasInstance.shiftLock.isLineDrawn = false;
+					pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+			}
 
+			// only use the delta according to the direction set
+			cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
+			{
+				[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+				[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+			} :
+			{
+				[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+				[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+			};
+			if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
+				// draw helpline
+				pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
+				new paper.Path.Line(
+					new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
+					new paper.Point( this.selectedSegment.point.x - 1, -50000 )
+				) :
+				new paper.Path.Line(
+					new paper.Point( -100000, this.selectedSegment.point.y ),
+					new paper.Point( 100000, this.selectedSegment.point.y )
+				);
+				pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
+				pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
+				pCanvasInstance.shiftLock.isLineDrawn = true;
+			}
+			this.changesToConfirm = cursors;
+			sendManualChanges(cursors);
+		}
 		pCanvasInstance.prevPos = null;
 	};
 
