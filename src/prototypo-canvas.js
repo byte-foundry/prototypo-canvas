@@ -648,8 +648,8 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 				// draw helpline
 				pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
 				new paper.Path.Line(
-					new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
-					new paper.Point( this.selectedSegment.point.x - 1, -50000 )
+					new paper.Point( this.selectedSegment.point.x - 1 / pCanvasInstance.zoom , 50000 ),
+					new paper.Point( this.selectedSegment.point.x - 1 / pCanvasInstance.zoom, -50000 )
 				) :
 				new paper.Path.Line(
 					new paper.Point( -100000, this.selectedSegment.point.y ),
