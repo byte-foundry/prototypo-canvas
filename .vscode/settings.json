@@ -1,0 +1,6 @@
+// Placez vos paramètres dans ce fichier pour remplacer les paramètres par défaut et les paramètres utilisateur.
+{
+    "editor.renderWhitespace": "boundary",
+    "editor.fontFamily": "Roboto, Consolas, 'Courier New', monospace",
+    "editor.mouseWheelScrollSensitivity": 2
+}
