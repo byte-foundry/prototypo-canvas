@@ -64,15 +64,35 @@ return /******/ (function(modules) { // webpackBootstrap
 	var prototypo		= __webpack_require__(2);
 	var assign			= __webpack_require__(3).assign;
 	var cloneDeep		= __webpack_require__(4);
-	var EventEmitter	= __webpack_require__(106);
-	var glyph			= __webpack_require__(107);
-	var mouseHandlers	= __webpack_require__(109);
-	var init			= __webpack_require__(110);
-	var loadFont		= __webpack_require__(112);
-	var {drawUIEditor, createUIEditor} = __webpack_require__(113);
+	var forEach			= __webpack_require__(115);
+	var EventEmitter	= __webpack_require__(123);
+	var glyph			= __webpack_require__(124);
+	var mouseHandlers	= __webpack_require__(127);
+	var init			= __webpack_require__(128);
+	var loadFont		= __webpack_require__(130);
+	var { drawUIEditor, createUIEditor } = __webpack_require__(131);
 	
-	var _ = { assign: assign, cloneDeep: cloneDeep },
+	var _ = { assign: assign, cloneDeep: cloneDeep, forEach: forEach },
 		paper = prototypo.paper;
+	
+	var fontsMap;
+	var UIEditor;
+	
+	var confirmCursorsChanges = function(instance, oldCursors) {
+		const newCursors = _.cloneDeep(oldCursors);
+		const createIdentityCursors = function(cursors) {
+			Object.keys(cursors).forEach((key) => {
+				switch (typeof cursors[key]) {
+					case 'number': cursors[key] = 0; break;
+					case 'string': cursors[key] = '0deg'; break;
+					case 'object': cursors[key] = createIdentityCursors(cursors[key]); break;
+				}
+			});
+			return cursors;
+		};
+	
+		instance.emitEvent('manualchange', [ createIdentityCursors(newCursors), true ]);
+	};
 	
 	// constructor
 	function PrototypoCanvas( opts ) {
@@ -89,6 +109,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			glyphrUrl: 'http://www.glyphrstudio.com/online/'
 		}, opts);
 	
+		this.scope = paper;
 		this.canvas = opts.canvas;
 		this.view = paper.view;
 		this.view.center = [ 0, 0 ];
@@ -99,9 +120,31 @@ return /******/ (function(modules) { // webpackBootstrap
 		this._queue = [];
 		this._fill = this.opts.fill;
 		this._showNodes = this.opts.showNodes;
-		this.fontsMap = {};
 		this.isMousedown = false;
 		this.exportingZip = false;
+		this.allowMove = true;
+		this.isShiftPressed = false;
+		this.glyphPoints = [];
+		this.shiftLock = {
+			deltaX: 0,
+			deltaY: 0,
+			isLocked: false,
+			direction: '',
+			isLineDrawn: false,
+		};
+		this.snapping = {
+			isSnapped: false,
+			axis: '',
+			deltaX: 0,
+			deltaY: 0,
+			snappedTo: undefined,
+		};
+	
+		if (fontsMap) {
+			this.fontsMap = fontsMap;
+		}	else {
+			this.fontsMap = fontsMap = {};
+		}
 	
 		this.typographicFrame = {
 			spacingLeft: new paper.Shape.Rectangle(new paper.Point(-100000, -50000), new paper.Size(100000, 100000)),
@@ -109,6 +152,8 @@ return /******/ (function(modules) { // webpackBootstrap
 			low: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 			xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 			capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
+			linearDraggingHelper: undefined,
+			snappingHelper: undefined,
 		};
 		this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
 		this.typographicFrame.spacingLeft.strokeColor = '#24d390';
@@ -118,185 +163,47 @@ return /******/ (function(modules) { // webpackBootstrap
 		this.typographicFrame.xHeight.fillColor = '#777777';
 		this.typographicFrame.capHeight.fillColor = '#777777';
 	
+		this.view.onMouseMove = function(e) {
+			if (!pCanvasInstance.allowMove) {
+				e.preventDefault();
+				e.stopPropagation();
+			}
+	
+			return false;
+		}
+	
 		var pCanvasInstance = this;
 	
 		var emitEvent = this.emitEvent.bind(this);
 	
-		var confirmCursorsChanges = function(oldCursors) {
-			const newCursors = _.cloneDeep(oldCursors);
-			const createIdentityCursors = function(cursors) {
-				Object.keys(cursors).forEach((key) => {
-					switch (typeof cursors[key]) {
-						case 'number': cursors[key] = 0; break;
-						case 'string': cursors[key] = '0deg'; break;
-						case 'object': cursors[key] = createIdentityCursors(cursors[key]); break;
-					}
-				});
-				return cursors;
-			};
-	
-			emitEvent('manualchange', [createIdentityCursors(newCursors), true]);
-		};
-	
-		var UIEditor = createUIEditor(paper, {
+		UIEditor = createUIEditor(paper, {
 			onCursorsChanged(cursors) {
-				emitEvent('manualchange', [cursors]);
-			if(!UIEditor.changesToConfirm) {
-				UIEditor.changesToConfirm = cursors;
-			}
+				emitEvent('manualchange', [ cursors ]);
+				if (!UIEditor.changesToConfirm) {
+					UIEditor.changesToConfirm = cursors;
+				}
 			},
 			onConfirmChanges() {
 				var cursors = UIEditor.changesToConfirm;
-				confirmCursorsChanges(cursors);
+				confirmCursorsChanges(pCanvasInstance, cursors);
 				delete UIEditor.changesToConfirm;
+			},
+			onResetCursor(contourId, nodeId) {
+				emitEvent('manualreset', [ contourId, nodeId ]);
 			}
 		});
 	
-		this.view.onMouseDown = function(event) {
-			if(pCanvasInstance._showNodes) {
-				// if visible, skeleton points can be matched
-				var skeletons = paper.project.getItems({selected: true}).filter((item) => { return item.skeleton && !item.visible; });
-				skeletons.forEach((item) => { item.visible = true; });
-	
-				var results = paper.project.hitTestAll(event.point, {
-					match(hit) {
-						return hit.item.skeleton || hit.segment.expandedFrom;
-					},
-					segments: true,
-					handles: true,
-					tolerance: (10 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
-				});
-				// matching skeleton first
-				var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
-	
-				skeletons.forEach((item) => { item.visible = false; });
-	
-				if(hitResult) {
-					if(hitResult.type.startsWith('handle')) {
-						this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
-						this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
-						this.selectedHandleNorm = this.selectedHandle.length;
-						this.selectedHandleAngle = this.selectedHandle.angle;
-					}
-					this.selectedSegment = hitResult.segment;
-					this.skewedSelectedSegmentPoint = new paper.Point(
-						this.selectedSegment.x + (this.selectedSegment.expandedFrom || this.selectedSegment).path.viewMatrix.c / paper.view.zoom  * this.selectedSegment.y,
-						this.selectedSegment.y
-					);
-					this.selectedSegmentNorm = this.skewedSelectedSegmentPoint.length;
-					this.selectedSegmentAngle = this.skewedSelectedSegmentPoint.angle;
-	
-					UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
-	
-					return;
-				}
-			}
-	
-			pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
-		};
-	
-		this.view.onMouseDrag = function(event) {
-			console.log(event.delta);
-			if(this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
-				// change dir
-				var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
-				var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
-	
-				var eventNormalized = event.delta.multiply(this.selectedHandleNorm/mouseVecNorm);
-				var newHandlePosition = new paper.Point(
-					this.selectedHandlePos.x + eventNormalized.x,
-					this.selectedHandlePos.y - eventNormalized.y
-				);
-	
-				var normalizedHandle = newHandlePosition.normalize().multiply(this.selectedHandleNorm);
-				this.selectedHandlePos.x = normalizedHandle.x;
-				this.selectedHandlePos.y = normalizedHandle.y;
-				var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
-				this.selectedHandleAngle = normalizedHandle.angle;
-	
-				var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
-				var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
-				var dirType = (invertDir && !isDirIn) || (!invertDir && isDirIn) ? 'dirIn' : 'dirOut';
-	
-				var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-				var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-				var cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
-				this.changesToConfirm = cursors;
-				return emitEvent('manualchange', [cursors]);
-			}
-			else if (this.selectedSegment && pCanvasInstance._showNodes) {
-				if(this.selectedSegment.path.skeleton) {
-					// change skeleton x, y
-					var contourIdx = this.selectedSegment.contourIdx;
-					var nodeIdx = this.selectedSegment.nodeIdx;
-					var cursors = {
-						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-					};
-					this.changesToConfirm = cursors;
-					return emitEvent('manualchange', [cursors]);
-				}
-				else {
-					// change width
-	
-					if (this.selectedSegment.expandedFrom.skeletonBaseWidth === undefined) {
-						this.selectedSegment.expandedFrom.skeletonBaseWidth = this.selectedSegment.expandedFrom.expand.width;
-					}
-					var angle = this.selectedSegment.expandedFrom.expand.angle;
-					var distrib = this.selectedSegment.expandedFrom.expand.distr;
-					var baseWidth = this.selectedSegment.expandedFrom.skeletonBaseWidth;
-					var direction = new paper.Point(
-						Math.cos(angle),
-						Math.sin(angle)
-					);
-					var deltaWidth = (direction.x * event.delta.x - direction.y * event.delta.y) / baseWidth;
-	
-					if(this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
-						deltaWidth *= -1;
-						if (distrib !== 0) {
-							deltaWidth /= distrib;
-						}
-					}
-					else if (distrib !== 1) {
-						deltaWidth /= (1 - distrib);
-					}
-	
-					var contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-					var nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-					var cursors = {
-						[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: { width: deltaWidth },
-					};
-					this.changesToConfirm = cursors;
-					return emitEvent('manualchange', [cursors]);
-				}
-			}
-			else if(pCanvasInstance.prevPos) {
-				var currPos = new paper.Point(event.event.clientX, event.event.clientY),
-					delta = currPos.subtract(pCanvasInstance.prevPos);
-	
-				pCanvasInstance.prevPos = currPos;
-	
-				this.center = this.center.subtract(delta.divide(this.zoom * window.devicePixelRatio));
-				return;
-			}
-	
-			pCanvasInstance.prevPos = null;
-		};
-	
-		this.view.onMouseUp = function(event) {
-			if(this.changesToConfirm) {
-				confirmCursorsChanges(this.changesToConfirm);
-				delete this.changesToConfirm;
-			}
-			this.selectedHandle = null;
-			this.selectedSegment = null;
-		};
+		this.setupEvents( pCanvasInstance );
 	
 		// this.grid = new Grid( paper );
 	
 		// bind workerHandlers
 		if ( this.worker ) {
 			this.worker.port.addEventListener('message', function(e) {
+				if (e.data.handler === 'font') {
+					this.emitEvent( 'worker.fontCreated');
+				}
+	
 				// the job might have been cancelled
 				if ( !this.currentJob ) {
 					return;
@@ -334,24 +241,36 @@ return /******/ (function(modules) { // webpackBootstrap
 				delete this.latestRafValues;
 			}
 	
-			drawUIEditor(paper, !this._showNodes, UIEditor);
-	
-			if(this.prevGlyph !== this.currGlyph) {
+			if (this.prevGlyph !== this.currGlyph) {
 				this.prevGlyph = this.currGlyph;
 	
 				delete UIEditor.selection;
 			}
+	
+			drawTypographicFrame.bind(this)();
+			drawUIEditor(paper, !this._showNodes, UIEditor);
 		};
 		updateLoop();
 	}
 	
 	function drawTypographicFrame() {
-		if (this.currGlyph) {
+		if (this.currGlyph && this.currGlyph.ot.advanceWidth) {
 			var spacingRight = this.currGlyph.ot.advanceWidth + 100000 / 2;
 			this.typographicFrame.spacingRight.position = new paper.Point(spacingRight, 0);
-			this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
-			this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+			if (this.latestRafValues) {
+					this.typographicFrame.xHeight.position = new paper.Point(0, this.latestRafValues.xHeight);
+				this.typographicFrame.capHeight.position = new paper.Point(0, this.latestRafValues.capHeight);
+			}
 		}
+	
+		this.typographicFrame.spacingLeft.strokeWidth = 1 / this.zoom;
+		this.typographicFrame.spacingRight.strokeWidth = 1 / this.zoom;
+		this.typographicFrame.low.size.height = 1 / this.zoom;
+		this.typographicFrame.xHeight.size.height = 1 / this.zoom;
+		this.typographicFrame.capHeight.size.height = 1 / this.zoom;
+		this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
+		this.typographicFrame.snappingHelper ? this.typographicFrame.snappingHelper.strokeWidth = 2 / this.zoom : null;
+		this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
 	}
 	
 	PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
@@ -423,6 +342,393 @@ return /******/ (function(modules) { // webpackBootstrap
 		);
 	};
 	
+	PrototypoCanvas.prototype.setupCanvas = function( canvas ) {
+		if (canvas !== this.view._element) {
+			this.scope.setup(canvas);
+			this.view = this.scope.view;
+			this.setupEvents( this );
+		}
+	}
+	
+	PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
+		var emitEvent = this.emitEvent.bind(this);
+		this.view.onKeyDown = function(event) {
+			if (event.event.keyCode === 16) {
+				this.isShiftPressed = true;
+			}
+		}
+	
+		this.view.onKeyUp = function(event) {
+			if (event.event.keyCode === 16) {
+				this.isShiftPressed = false;
+				pCanvasInstance.shiftLock.isLocked = false;
+				pCanvasInstance.shiftLock.isLineDrawn = false;
+				pCanvasInstance.shiftLock.deltaX = 0;
+				pCanvasInstance.shiftLock.deltaY = 0;
+				pCanvasInstance.shiftLock.direction = '';
+				pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
+			}
+		}
+	
+		this.view.onMouseDown = function(event) {
+			if (pCanvasInstance._showNodes) {
+				// if visible, skeleton points can be matched
+				var skeletons = paper.project.getItems({ selected: true }).filter((item) => { return item.skeleton && !item.visible; });
+				skeletons.forEach((item) => { item.visible = true; });
+	
+				var results = paper.project.hitTestAll(event.point, {
+					match(hit) {
+						return hit.item.skeleton || hit.segment.expandedFrom;
+					},
+					segments: true,
+					handles: true,
+					tolerance: (20 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
+				});
+				// matching skeleton first
+				var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
+	
+				skeletons.forEach((item) => {
+					item.visible = false;
+				});
+	
+				if (hitResult) {
+					if (hitResult.segment.expandedTo) {
+						skeletons.forEach((item) => {
+							_.forEach(item.expandedTo, function(expanded) {
+								expanded.selected = false;
+							});
+							item.selected = false;
+						});
+	
+						_.forEach(hitResult.segment.expandedTo, function(expanded) {
+							expanded.selected = true;
+							hitResult.segment.selected = true;
+						});
+					}
+	
+					if (hitResult.type.startsWith('handle')) {
+						this.selectedHandle = hitResult.type == 'handle-in' ? hitResult.segment.handleIn : hitResult.segment.handleOut;
+						this.selectedHandlePos = new paper.Point(this.selectedHandle.x, this.selectedHandle.y);
+						this.selectedHandleNorm = this.selectedHandle.length;
+						this.selectedHandleAngle = this.selectedHandle.angle;
+					}
+					this.selectedSegment = hitResult.segment;
+					this.skewedSelectedSegmentPoint = new paper.Point(
+						this.selectedSegment.x + (this.selectedSegment.expandedFrom || this.selectedSegment).path.viewMatrix.c / paper.view.zoom  * this.selectedSegment.y,
+						this.selectedSegment.y
+					);
+					this.selectedSegmentNorm = this.skewedSelectedSegmentPoint.length;
+					this.selectedSegmentAngle = this.skewedSelectedSegmentPoint.angle;
+	
+					UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
+	
+	
+					skeletons.forEach((item) => {
+						item.segments.forEach((segment) => {
+							if (segment !== this.selectedSegment) {
+								pCanvasInstance.glyphPoints.push({ x: segment.point.x, y: segment.point.y });
+							}
+						});
+					});
+					return;
+				}
+			}
+	
+			if (pCanvasInstance.allowMove) {
+				pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
+			}
+		};
+	
+		this.view.onMouseDrag = function(event) {
+			var contourIdx;
+			var nodeIdx;
+			var cursors;
+			var change = '';
+			var skeletonChange = '';
+			let snappingTrigger = 10;
+			let unSnappingTrigger = 15;
+			let lockTrigger = 4;
+			let switchDirectionTrigger = 12;
+			let xDirection = (event.delta.x > 0) ? 'right' : 'left';
+			let yDirection = (event.delta.y < 0) ? 'top' : 'bottom';
+	
+			let sendManualChanges = (cursors) => {
+				emitEvent('manualchange', [ cursors ]);
+			}
+	
+			if (this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
+				change = 'dir';
+			} else if (this.selectedSegment && pCanvasInstance._showNodes) {
+				contourIdx = this.selectedSegment.contourIdx;
+				nodeIdx = this.selectedSegment.nodeIdx;
+				if (this.selectedSegment.path.skeleton) {
+					// change skeleton x, y
+					change = 'skeleton';
+	
+					if (this.isShiftPressed) {
+						skeletonChange = 'shiftlock';
+					}
+					//Snapping mechanism
+					if (!pCanvasInstance.snapping.isSnapped) {
+						//Not yet snapped, scan all nodes to get a match
+						for (let glyphPoint of pCanvasInstance.glyphPoints) {
+							if (Math.abs(this.selectedSegment.point.x - glyphPoint.x) < snappingTrigger) {
+								skeletonChange = 'gotSnapped';
+								pCanvasInstance.snapping.isSnapped = true;
+								pCanvasInstance.snapping.axis = 'x';
+								pCanvasInstance.snapping.snappedTo = glyphPoint;
+								break;
+							}
+							if (Math.abs(this.selectedSegment.point.y - glyphPoint.y) < snappingTrigger) {
+								skeletonChange = 'gotSnapped';
+								pCanvasInstance.snapping.isSnapped = true;
+								pCanvasInstance.snapping.axis = 'y';
+								pCanvasInstance.snapping.snappedTo = glyphPoint;
+								break;
+							}
+						}
+					} else {
+						//Snapped, engage the unsnapping loop
+						skeletonChange = 'snapped';
+						pCanvasInstance.snapping.deltaX += event.delta.x;
+						pCanvasInstance.snapping.deltaY += event.delta.y;
+						if ( ( pCanvasInstance.snapping.axis === 'y' && Math.abs(pCanvasInstance.snapping.deltaY) > unSnappingTrigger )  ||
+							( pCanvasInstance.snapping.axis === 'x' && Math.abs(pCanvasInstance.snapping.deltaX) > unSnappingTrigger ) ) {
+							// Reached the trigger, unsnap it
+							skeletonChange = 'unSnapped';
+						}
+					}
+				} else {
+					change = 'width';
+				}
+			} else if (pCanvasInstance.prevPos) {
+				var currPos = new paper.Point(event.event.clientX, event.event.clientY),
+					delta = currPos.subtract(pCanvasInstance.prevPos);
+	
+				pCanvasInstance.prevPos = currPos;
+	
+				this.center = this.center.subtract(delta.divide(this.zoom * window.devicePixelRatio));
+				return;
+			}
+	
+			switch (change) {
+				case 'dir':
+					var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
+					var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
+	
+					var eventNormalized = event.delta.multiply(this.selectedHandleNorm / mouseVecNorm);
+					var newHandlePosition = new paper.Point(
+						this.selectedHandlePos.x + eventNormalized.x,
+						this.selectedHandlePos.y - eventNormalized.y
+					);
+	
+					var normalizedHandle = newHandlePosition.normalize().multiply(this.selectedHandleNorm);
+					this.selectedHandlePos.x = normalizedHandle.x;
+					this.selectedHandlePos.y = normalizedHandle.y;
+					var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
+					this.selectedHandleAngle = normalizedHandle.angle;
+	
+					var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
+					var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
+					//If point is smooth we take the dir that is not undefined else we take the dir
+					//we're modifying
+					var dirType = this.selectedSegment.expandedFrom.type === 'smooth' ?
+							!this.selectedSegment.expandedFrom.dirIn ?
+								'dirOut' :
+								'dirIn' :
+							(invertDir && !isDirIn) || (!invertDir && isDirIn) ?
+							'dirIn' :
+							'dirOut';
+	
+					contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+					nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+					cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
+					this.changesToConfirm = cursors;
+					sendManualChanges(cursors)
+					break;
+				case 'width':
+					if (this.selectedSegment.expandedFrom.skeletonBaseWidth === undefined) {
+						this.selectedSegment.expandedFrom.skeletonBaseWidth = this.selectedSegment.expandedFrom.expand.width;
+					}
+					var angle = this.selectedSegment.expandedFrom.expand.angle;
+					var distrib = this.selectedSegment.expandedFrom.expand.distr;
+					var baseWidth = this.selectedSegment.expandedFrom.skeletonBaseWidth;
+					var direction = new paper.Point(
+						Math.cos(angle),
+						Math.sin(angle)
+					);
+					var deltaWidth = (direction.x * event.delta.x - direction.y * event.delta.y) / baseWidth;
+	
+					if (this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[0]) {
+						deltaWidth *= -1;
+						if (distrib !== 0) {
+							deltaWidth /= distrib;
+						}
+					} else if (distrib !== 1) {
+						deltaWidth /= (1 - distrib);
+					}
+	
+					contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+					nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+					cursors = {
+						[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: { width: deltaWidth },
+					};
+					this.changesToConfirm = cursors;
+					sendManualChanges(cursors);
+					break;
+				case 'skeleton':
+					switch (skeletonChange) {
+						case 'shiftlock':
+							if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
+								pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
+								pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
+							} else {
+								pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
+								pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
+							}
+							if (!pCanvasInstance.shiftLock.isLocked) {
+								if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
+									pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+									pCanvasInstance.shiftLock.isLocked = true;
+								}
+							} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
+									pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
+									pCanvasInstance.shiftLock.isLineDrawn = false;
+									pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+							}
+	
+							// only use the delta according to the direction set
+							cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
+							{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+							} :
+							{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+							};
+							if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
+								pCanvasInstance.shiftLock.isLineDrawn = true;
+								// draw helpline
+								pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
+								new paper.Path.Line(
+									new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
+									new paper.Point( this.selectedSegment.point.x - 1, -50000 )
+								) :
+								new paper.Path.Line(
+									new paper.Point( -100000, this.selectedSegment.point.y ),
+									new paper.Point( 100000, this.selectedSegment.point.y )
+								);
+								pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
+								pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
+							}
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+							break;
+						case 'gotSnapped':
+							if (pCanvasInstance.snapping.axis === 'x') {
+								cursors = {
+									[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: pCanvasInstance.snapping.snappedTo.x - this.selectedSegment.point.x,
+									[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+								};
+								pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+									new paper.Point( this.selectedSegment.point.x + pCanvasInstance.snapping.snappedTo.x - this.selectedSegment.point.x, this.selectedSegment.point.y - event.delta.y),
+									new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
+								);
+							} else {
+								cursors = {
+									[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+									[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y,
+								};
+								pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+									new paper.Point( this.selectedSegment.point.x + event.delta.x, this.selectedSegment.point.y + pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y),
+									new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
+								);
+							}
+							pCanvasInstance.typographicFrame.snappingHelper.strokeColor = '#FF4AFF';
+							pCanvasInstance.typographicFrame.snappingHelper.opacity = 0.5;
+							pCanvasInstance.typographicFrame.snappingHelper.applyMatrix = false;
+							pCanvasInstance.shiftLock.isLineDrawn = true;
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+							break;
+						case 'snapped':
+							if (pCanvasInstance.snapping.axis === 'y') {
+								pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x = this.selectedSegment.point.x + event.delta.x;
+							}
+							if (pCanvasInstance.snapping.axis === 'x') {
+								pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = this.selectedSegment.point.y - event.delta.y;
+							}
+							cursors = pCanvasInstance.snapping.axis === 'y' ?
+							{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
+							} :
+							{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+							};
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+							break;
+						case 'unSnapped':
+							cursors = pCanvasInstance.snapping.axis === 'y' ?
+							{
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: yDirection === 'bottom' ?
+																															-unSnappingTrigger :
+																															unSnappingTrigger,
+							} :
+							{
+									[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: xDirection === 'right' ?
+																																unSnappingTrigger :
+																																-unSnappingTrigger,
+									[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+							};
+							pCanvasInstance.snapping.deltaX = 0;
+							pCanvasInstance.snapping.deltaY = 0;
+							pCanvasInstance.snapping.isSnapped = false;
+							pCanvasInstance.snapping.axis = '';
+							pCanvasInstance.snapping.snappedTo = undefined;
+							pCanvasInstance.typographicFrame.snappingHelper.remove();
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+							break;
+						default:
+							cursors = {
+								[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
+								[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
+							};
+							this.changesToConfirm = cursors;
+							sendManualChanges(cursors);
+							break;
+					}
+					break;
+				default:
+					break;
+			}
+	
+			pCanvasInstance.prevPos = null;
+		};
+	
+		this.view.onMouseUp = function() {
+			if (this.changesToConfirm) {
+				confirmCursorsChanges(pCanvasInstance, this.changesToConfirm);
+				delete this.changesToConfirm;
+			}
+			pCanvasInstance.prevPos = undefined;
+			this.selectedHandle = null;
+			this.selectedSegment = null;
+			pCanvasInstance.glyphPoints = [];
+			pCanvasInstance.snapping.deltaX = 0;
+			pCanvasInstance.snapping.deltaY = 0;
+			pCanvasInstance.snapping.isSnapped = false;
+			pCanvasInstance.snapping.axis = '';
+			pCanvasInstance.snapping.snappedTo = undefined;
+			pCanvasInstance.typographicFrame.snappingHelper ? pCanvasInstance.typographicFrame.snappingHelper.remove() : null;
+		};
+	}
+	
 	// overwrite the appearance of #selected items in paper.js
 	paper.PaperScope.prototype.Path.prototype._drawSelected = glyph._drawSelected;
 	_.assign( paper.settings, {
@@ -444,7 +750,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		'svgFont',
 		'otfFont',
 		'alternate',
-		'getGlyphProperty'
+		'getGlyphsProperties'
 	];
 	
 	PrototypoCanvas.prototype.enqueue = function( message ) {
@@ -504,24 +810,10 @@ return /******/ (function(modules) { // webpackBootstrap
 		});
 	};
 	
-	PrototypoCanvas.prototype.getGlyphProperty = function(glyph, properties, callback) {
-		var unicode = 0;
-	
-		if (typeof glyph === 'string' && glyph.length > 0){
-			if (glyph.length > 1) {
-				glyph = glyph[0];
-			}
-	
-			unicode = glyph.charCodeAt(0);
-		}
-		else if (typeof glyph === 'number') {
-			unicode = glyph;
-		}
-	
+	PrototypoCanvas.prototype.getGlyphsProperties = function(properties, callback) {
 		this.enqueue({
-			type: 'getGlyphProperty',
+			type: 'getGlyphsProperties',
 			data: {
-				unicode: unicode,
 				properties: properties
 			},
 			callback: (typeof callback === 'function' ? callback : undefined)
@@ -529,6 +821,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 	
 	PrototypoCanvas.prototype.setAlternateFor = function( unicode, glyphName ) {
+		var result = [];
 		if ( !glyphName ) {
 			Object.keys(unicode).forEach(function(code) {
 	
@@ -536,7 +829,7 @@ return /******/ (function(modules) { // webpackBootstrap
 					this.displayChar( this.font.glyphMap[unicode[code]] );
 				}
 	
-				this.font.setAlternatesFor(code, unicode[code]);
+				result = result.concat(this.font.setAlternatesFor(code, unicode[code]));
 			}.bind(this));
 	
 			this.enqueue({
@@ -546,7 +839,7 @@ return /******/ (function(modules) { // webpackBootstrap
 				}
 			});
 		} else {
-			this.font.setAlternatesFor(unicode, glyphName);
+			result = result.concat(this.font.setAlternatesFor(unicode, glyphName));
 	
 			this.displayChar( this.font.glyphMap[glyphName] );
 	
@@ -559,6 +852,7 @@ return /******/ (function(modules) { // webpackBootstrap
 			});
 		}
 		this.update( this.latestValues );
+		return result;
 	};
 	
 	PrototypoCanvas.prototype.download =
@@ -728,6 +1022,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var baseClone = __webpack_require__(5);
 	
+	/** Used to compose bitmasks for cloning. */
+	var CLONE_DEEP_FLAG = 1,
+	    CLONE_SYMBOLS_FLAG = 4;
+	
 	/**
 	 * This method is like `_.clone` except that it recursively clones `value`.
 	 *
@@ -747,7 +1045,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * // => false
 	 */
 	function cloneDeep(value) {
-	  return baseClone(value, true, true);
+	  return baseClone(value, CLONE_DEEP_FLAG | CLONE_SYMBOLS_FLAG);
 	}
 	
 	module.exports = cloneDeep;
@@ -758,21 +1056,29 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ function(module, exports, __webpack_require__) {
 
 	var Stack = __webpack_require__(6),
-	    arrayEach = __webpack_require__(46),
-	    assignValue = __webpack_require__(47),
-	    baseAssign = __webpack_require__(50),
-	    cloneBuffer = __webpack_require__(73),
-	    copyArray = __webpack_require__(74),
-	    copySymbols = __webpack_require__(75),
-	    getAllKeys = __webpack_require__(78),
-	    getTag = __webpack_require__(81),
-	    initCloneArray = __webpack_require__(87),
-	    initCloneByTag = __webpack_require__(88),
-	    initCloneObject = __webpack_require__(103),
-	    isArray = __webpack_require__(58),
-	    isBuffer = __webpack_require__(59),
-	    isObject = __webpack_require__(24),
-	    keys = __webpack_require__(52);
+	    arrayEach = __webpack_require__(50),
+	    assignValue = __webpack_require__(51),
+	    baseAssign = __webpack_require__(54),
+	    baseAssignIn = __webpack_require__(77),
+	    cloneBuffer = __webpack_require__(81),
+	    copyArray = __webpack_require__(82),
+	    copySymbols = __webpack_require__(83),
+	    copySymbolsIn = __webpack_require__(86),
+	    getAllKeys = __webpack_require__(90),
+	    getAllKeysIn = __webpack_require__(92),
+	    getTag = __webpack_require__(93),
+	    initCloneArray = __webpack_require__(98),
+	    initCloneByTag = __webpack_require__(99),
+	    initCloneObject = __webpack_require__(113),
+	    isArray = __webpack_require__(62),
+	    isBuffer = __webpack_require__(63),
+	    isObject = __webpack_require__(30),
+	    keys = __webpack_require__(56);
+	
+	/** Used to compose bitmasks for cloning. */
+	var CLONE_DEEP_FLAG = 1,
+	    CLONE_FLAT_FLAG = 2,
+	    CLONE_SYMBOLS_FLAG = 4;
 	
 	/** `Object#toString` result references. */
 	var argsTag = '[object Arguments]',
@@ -825,16 +1131,22 @@ return /******/ (function(modules) { // webpackBootstrap
 	 *
 	 * @private
 	 * @param {*} value The value to clone.
-	 * @param {boolean} [isDeep] Specify a deep clone.
-	 * @param {boolean} [isFull] Specify a clone including symbols.
+	 * @param {boolean} bitmask The bitmask flags.
+	 *  1 - Deep clone
+	 *  2 - Flatten inherited properties
+	 *  4 - Clone symbols
 	 * @param {Function} [customizer] The function to customize cloning.
 	 * @param {string} [key] The key of `value`.
 	 * @param {Object} [object] The parent object of `value`.
 	 * @param {Object} [stack] Tracks traversed objects and their clone counterparts.
 	 * @returns {*} Returns the cloned value.
 	 */
-	function baseClone(value, isDeep, isFull, customizer, key, object, stack) {
-	  var result;
+	function baseClone(value, bitmask, customizer, key, object, stack) {
+	  var result,
+	      isDeep = bitmask & CLONE_DEEP_FLAG,
+	      isFlat = bitmask & CLONE_FLAT_FLAG,
+	      isFull = bitmask & CLONE_SYMBOLS_FLAG;
+	
 	  if (customizer) {
 	    result = object ? customizer(value, key, object, stack) : customizer(value);
 	  }
@@ -858,9 +1170,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	      return cloneBuffer(value, isDeep);
 	    }
 	    if (tag == objectTag || tag == argsTag || (isFunc && !object)) {
-	      result = initCloneObject(isFunc ? {} : value);
+	      result = (isFlat || isFunc) ? {} : initCloneObject(value);
 	      if (!isDeep) {
-	        return copySymbols(value, baseAssign(result, value));
+	        return isFlat
+	          ? copySymbolsIn(value, baseAssignIn(result, value))
+	          : copySymbols(value, baseAssign(result, value));
 	      }
 	    } else {
 	      if (!cloneableTags[tag]) {
@@ -877,14 +1191,18 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	  stack.set(value, result);
 	
-	  var props = isArr ? undefined : (isFull ? getAllKeys : keys)(value);
+	  var keysFunc = isFull
+	    ? (isFlat ? getAllKeysIn : getAllKeys)
+	    : (isFlat ? keysIn : keys);
+	
+	  var props = isArr ? undefined : keysFunc(value);
 	  arrayEach(props || value, function(subValue, key) {
 	    if (props) {
 	      key = subValue;
 	      subValue = value[key];
 	    }
 	    // Recursively populate clone (susceptible to call stack limits).
-	    assignValue(result, key, baseClone(subValue, isDeep, isFull, customizer, key, value, stack));
+	    assignValue(result, key, baseClone(subValue, bitmask, customizer, key, value, stack));
 	  });
 	  return result;
 	}
@@ -944,7 +1262,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function ListCache(entries) {
 	  var index = -1,
-	      length = entries ? entries.length : 0;
+	      length = entries == null ? 0 : entries.length;
 	
 	  this.clear();
 	  while (++index < length) {
@@ -1263,7 +1581,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var ListCache = __webpack_require__(7),
 	    Map = __webpack_require__(20),
-	    MapCache = __webpack_require__(31);
+	    MapCache = __webpack_require__(35);
 	
 	/** Used as the size to enable large array optimizations. */
 	var LARGE_ARRAY_SIZE = 200;
@@ -1302,7 +1620,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21),
-	    root = __webpack_require__(27);
+	    root = __webpack_require__(26);
 	
 	/* Built-in method references that are verified to be native. */
 	var Map = getNative(root, 'Map');
@@ -1315,7 +1633,7 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ function(module, exports, __webpack_require__) {
 
 	var baseIsNative = __webpack_require__(22),
-	    getValue = __webpack_require__(30);
+	    getValue = __webpack_require__(34);
 	
 	/**
 	 * Gets the native function at `key` of `object`.
@@ -1338,9 +1656,9 @@ return /******/ (function(modules) { // webpackBootstrap
 /***/ function(module, exports, __webpack_require__) {
 
 	var isFunction = __webpack_require__(23),
-	    isMasked = __webpack_require__(25),
-	    isObject = __webpack_require__(24),
-	    toSource = __webpack_require__(29);
+	    isMasked = __webpack_require__(31),
+	    isObject = __webpack_require__(30),
+	    toSource = __webpack_require__(33);
 	
 	/**
 	 * Used to match `RegExp`
@@ -1390,22 +1708,14 @@ return /******/ (function(modules) { // webpackBootstrap
 /* 23 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isObject = __webpack_require__(24);
+	var baseGetTag = __webpack_require__(24),
+	    isObject = __webpack_require__(30);
 	
 	/** `Object#toString` result references. */
-	var funcTag = '[object Function]',
+	var asyncTag = '[object AsyncFunction]',
+	    funcTag = '[object Function]',
 	    genTag = '[object GeneratorFunction]',
 	    proxyTag = '[object Proxy]';
-	
-	/** Used for built-in method references. */
-	var objectProto = Object.prototype;
-	
-	/**
-	 * Used to resolve the
-	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
-	 * of values.
-	 */
-	var objectToString = objectProto.toString;
 	
 	/**
 	 * Checks if `value` is classified as a `Function` object.
@@ -1425,10 +1735,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * // => false
 	 */
 	function isFunction(value) {
+	  if (!isObject(value)) {
+	    return false;
+	  }
 	  // The use of `Object#toString` avoids issues with the `typeof` operator
-	  // in Safari 9 which returns 'object' for typed array and other constructors.
-	  var tag = isObject(value) ? objectToString.call(value) : '';
-	  return tag == funcTag || tag == genTag || tag == proxyTag;
+	  // in Safari 9 which returns 'object' for typed arrays and other constructors.
+	  var tag = baseGetTag(value);
+	  return tag == funcTag || tag == genTag || tag == asyncTag || tag == proxyTag;
 	}
 	
 	module.exports = isFunction;
@@ -1436,6 +1749,159 @@ return /******/ (function(modules) { // webpackBootstrap
 
 /***/ },
 /* 24 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var Symbol = __webpack_require__(25),
+	    getRawTag = __webpack_require__(28),
+	    objectToString = __webpack_require__(29);
+	
+	/** `Object#toString` result references. */
+	var nullTag = '[object Null]',
+	    undefinedTag = '[object Undefined]';
+	
+	/** Built-in value references. */
+	var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+	
+	/**
+	 * The base implementation of `getTag` without fallbacks for buggy environments.
+	 *
+	 * @private
+	 * @param {*} value The value to query.
+	 * @returns {string} Returns the `toStringTag`.
+	 */
+	function baseGetTag(value) {
+	  if (value == null) {
+	    return value === undefined ? undefinedTag : nullTag;
+	  }
+	  value = Object(value);
+	  return (symToStringTag && symToStringTag in value)
+	    ? getRawTag(value)
+	    : objectToString(value);
+	}
+	
+	module.exports = baseGetTag;
+
+
+/***/ },
+/* 25 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var root = __webpack_require__(26);
+	
+	/** Built-in value references. */
+	var Symbol = root.Symbol;
+	
+	module.exports = Symbol;
+
+
+/***/ },
+/* 26 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var freeGlobal = __webpack_require__(27);
+	
+	/** Detect free variable `self`. */
+	var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
+	
+	/** Used as a reference to the global object. */
+	var root = freeGlobal || freeSelf || Function('return this')();
+	
+	module.exports = root;
+
+
+/***/ },
+/* 27 */
+/***/ function(module, exports) {
+
+	/* WEBPACK VAR INJECTION */(function(global) {/** Detect free variable `global` from Node.js. */
+	var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
+	
+	module.exports = freeGlobal;
+	
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
+
+/***/ },
+/* 28 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var Symbol = __webpack_require__(25);
+	
+	/** Used for built-in method references. */
+	var objectProto = Object.prototype;
+	
+	/** Used to check objects for own properties. */
+	var hasOwnProperty = objectProto.hasOwnProperty;
+	
+	/**
+	 * Used to resolve the
+	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+	 * of values.
+	 */
+	var nativeObjectToString = objectProto.toString;
+	
+	/** Built-in value references. */
+	var symToStringTag = Symbol ? Symbol.toStringTag : undefined;
+	
+	/**
+	 * A specialized version of `baseGetTag` which ignores `Symbol.toStringTag` values.
+	 *
+	 * @private
+	 * @param {*} value The value to query.
+	 * @returns {string} Returns the raw `toStringTag`.
+	 */
+	function getRawTag(value) {
+	  var isOwn = hasOwnProperty.call(value, symToStringTag),
+	      tag = value[symToStringTag];
+	
+	  try {
+	    value[symToStringTag] = undefined;
+	    var unmasked = true;
+	  } catch (e) {}
+	
+	  var result = nativeObjectToString.call(value);
+	  if (unmasked) {
+	    if (isOwn) {
+	      value[symToStringTag] = tag;
+	    } else {
+	      delete value[symToStringTag];
+	    }
+	  }
+	  return result;
+	}
+	
+	module.exports = getRawTag;
+
+
+/***/ },
+/* 29 */
+/***/ function(module, exports) {
+
+	/** Used for built-in method references. */
+	var objectProto = Object.prototype;
+	
+	/**
+	 * Used to resolve the
+	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
+	 * of values.
+	 */
+	var nativeObjectToString = objectProto.toString;
+	
+	/**
+	 * Converts `value` to a string using `Object.prototype.toString`.
+	 *
+	 * @private
+	 * @param {*} value The value to convert.
+	 * @returns {string} Returns the converted string.
+	 */
+	function objectToString(value) {
+	  return nativeObjectToString.call(value);
+	}
+	
+	module.exports = objectToString;
+
+
+/***/ },
+/* 30 */
 /***/ function(module, exports) {
 
 	/**
@@ -1472,10 +1938,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 25 */
+/* 31 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var coreJsData = __webpack_require__(26);
+	var coreJsData = __webpack_require__(32);
 	
 	/** Used to detect methods masquerading as native. */
 	var maskSrcKey = (function() {
@@ -1498,10 +1964,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 26 */
+/* 32 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var root = __webpack_require__(27);
+	var root = __webpack_require__(26);
 	
 	/** Used to detect overreaching core-js shims. */
 	var coreJsData = root['__core-js_shared__'];
@@ -1510,33 +1976,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 27 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var freeGlobal = __webpack_require__(28);
-	
-	/** Detect free variable `self`. */
-	var freeSelf = typeof self == 'object' && self && self.Object === Object && self;
-	
-	/** Used as a reference to the global object. */
-	var root = freeGlobal || freeSelf || Function('return this')();
-	
-	module.exports = root;
-
-
-/***/ },
-/* 28 */
-/***/ function(module, exports) {
-
-	/* WEBPACK VAR INJECTION */(function(global) {/** Detect free variable `global` from Node.js. */
-	var freeGlobal = typeof global == 'object' && global && global.Object === Object && global;
-	
-	module.exports = freeGlobal;
-	
-	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
-
-/***/ },
-/* 29 */
+/* 33 */
 /***/ function(module, exports) {
 
 	/** Used for built-in method references. */
@@ -1549,7 +1989,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * Converts `func` to its source code.
 	 *
 	 * @private
-	 * @param {Function} func The function to process.
+	 * @param {Function} func The function to convert.
 	 * @returns {string} Returns the source code.
 	 */
 	function toSource(func) {
@@ -1568,7 +2008,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 30 */
+/* 34 */
 /***/ function(module, exports) {
 
 	/**
@@ -1587,14 +2027,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 31 */
+/* 35 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var mapCacheClear = __webpack_require__(32),
-	    mapCacheDelete = __webpack_require__(40),
-	    mapCacheGet = __webpack_require__(43),
-	    mapCacheHas = __webpack_require__(44),
-	    mapCacheSet = __webpack_require__(45);
+	var mapCacheClear = __webpack_require__(36),
+	    mapCacheDelete = __webpack_require__(44),
+	    mapCacheGet = __webpack_require__(47),
+	    mapCacheHas = __webpack_require__(48),
+	    mapCacheSet = __webpack_require__(49);
 	
 	/**
 	 * Creates a map cache object to store key-value pairs.
@@ -1605,7 +2045,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function MapCache(entries) {
 	  var index = -1,
-	      length = entries ? entries.length : 0;
+	      length = entries == null ? 0 : entries.length;
 	
 	  this.clear();
 	  while (++index < length) {
@@ -1625,10 +2065,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 32 */
+/* 36 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Hash = __webpack_require__(33),
+	var Hash = __webpack_require__(37),
 	    ListCache = __webpack_require__(7),
 	    Map = __webpack_require__(20);
 	
@@ -1652,14 +2092,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 33 */
+/* 37 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var hashClear = __webpack_require__(34),
-	    hashDelete = __webpack_require__(36),
-	    hashGet = __webpack_require__(37),
-	    hashHas = __webpack_require__(38),
-	    hashSet = __webpack_require__(39);
+	var hashClear = __webpack_require__(38),
+	    hashDelete = __webpack_require__(40),
+	    hashGet = __webpack_require__(41),
+	    hashHas = __webpack_require__(42),
+	    hashSet = __webpack_require__(43);
 	
 	/**
 	 * Creates a hash object.
@@ -1670,7 +2110,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function Hash(entries) {
 	  var index = -1,
-	      length = entries ? entries.length : 0;
+	      length = entries == null ? 0 : entries.length;
 	
 	  this.clear();
 	  while (++index < length) {
@@ -1690,10 +2130,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 34 */
+/* 38 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var nativeCreate = __webpack_require__(35);
+	var nativeCreate = __webpack_require__(39);
 	
 	/**
 	 * Removes all key-value entries from the hash.
@@ -1711,7 +2151,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 35 */
+/* 39 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21);
@@ -1723,7 +2163,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 36 */
+/* 40 */
 /***/ function(module, exports) {
 
 	/**
@@ -1746,10 +2186,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 37 */
+/* 41 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var nativeCreate = __webpack_require__(35);
+	var nativeCreate = __webpack_require__(39);
 	
 	/** Used to stand-in for `undefined` hash values. */
 	var HASH_UNDEFINED = '__lodash_hash_undefined__';
@@ -1782,10 +2222,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 38 */
+/* 42 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var nativeCreate = __webpack_require__(35);
+	var nativeCreate = __webpack_require__(39);
 	
 	/** Used for built-in method references. */
 	var objectProto = Object.prototype;
@@ -1811,10 +2251,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 39 */
+/* 43 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var nativeCreate = __webpack_require__(35);
+	var nativeCreate = __webpack_require__(39);
 	
 	/** Used to stand-in for `undefined` hash values. */
 	var HASH_UNDEFINED = '__lodash_hash_undefined__';
@@ -1840,10 +2280,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 40 */
+/* 44 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var getMapData = __webpack_require__(41);
+	var getMapData = __webpack_require__(45);
 	
 	/**
 	 * Removes `key` and its value from the map.
@@ -1864,10 +2304,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 41 */
+/* 45 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isKeyable = __webpack_require__(42);
+	var isKeyable = __webpack_require__(46);
 	
 	/**
 	 * Gets the data for `map`.
@@ -1888,7 +2328,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 42 */
+/* 46 */
 /***/ function(module, exports) {
 
 	/**
@@ -1909,10 +2349,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 43 */
+/* 47 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var getMapData = __webpack_require__(41);
+	var getMapData = __webpack_require__(45);
 	
 	/**
 	 * Gets the map value for `key`.
@@ -1931,10 +2371,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 44 */
+/* 48 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var getMapData = __webpack_require__(41);
+	var getMapData = __webpack_require__(45);
 	
 	/**
 	 * Checks if a map value for `key` exists.
@@ -1953,10 +2393,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 45 */
+/* 49 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var getMapData = __webpack_require__(41);
+	var getMapData = __webpack_require__(45);
 	
 	/**
 	 * Sets the map `key` to `value`.
@@ -1981,7 +2421,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 46 */
+/* 50 */
 /***/ function(module, exports) {
 
 	/**
@@ -1995,7 +2435,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function arrayEach(array, iteratee) {
 	  var index = -1,
-	      length = array ? array.length : 0;
+	      length = array == null ? 0 : array.length;
 	
 	  while (++index < length) {
 	    if (iteratee(array[index], index, array) === false) {
@@ -2009,10 +2449,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 47 */
+/* 51 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseAssignValue = __webpack_require__(48),
+	var baseAssignValue = __webpack_require__(52),
 	    eq = __webpack_require__(11);
 	
 	/** Used for built-in method references. */
@@ -2043,10 +2483,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 48 */
+/* 52 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var defineProperty = __webpack_require__(49);
+	var defineProperty = __webpack_require__(53);
 	
 	/**
 	 * The base implementation of `assignValue` and `assignMergeValue` without
@@ -2074,7 +2514,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 49 */
+/* 53 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21);
@@ -2091,11 +2531,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 50 */
+/* 54 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var copyObject = __webpack_require__(51),
-	    keys = __webpack_require__(52);
+	var copyObject = __webpack_require__(55),
+	    keys = __webpack_require__(56);
 	
 	/**
 	 * The base implementation of `_.assign` without support for multiple sources
@@ -2114,11 +2554,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 51 */
+/* 55 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var assignValue = __webpack_require__(47),
-	    baseAssignValue = __webpack_require__(48);
+	var assignValue = __webpack_require__(51),
+	    baseAssignValue = __webpack_require__(52);
 	
 	/**
 	 * Copies properties of `source` to `object`.
@@ -2160,12 +2600,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 52 */
+/* 56 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var arrayLikeKeys = __webpack_require__(53),
-	    baseKeys = __webpack_require__(68),
-	    isArrayLike = __webpack_require__(72);
+	var arrayLikeKeys = __webpack_require__(57),
+	    baseKeys = __webpack_require__(72),
+	    isArrayLike = __webpack_require__(76);
 	
 	/**
 	 * Creates an array of the own enumerable property names of `object`.
@@ -2203,15 +2643,15 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 53 */
+/* 57 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseTimes = __webpack_require__(54),
-	    isArguments = __webpack_require__(55),
-	    isArray = __webpack_require__(58),
-	    isBuffer = __webpack_require__(59),
-	    isIndex = __webpack_require__(62),
-	    isTypedArray = __webpack_require__(63);
+	var baseTimes = __webpack_require__(58),
+	    isArguments = __webpack_require__(59),
+	    isArray = __webpack_require__(62),
+	    isBuffer = __webpack_require__(63),
+	    isIndex = __webpack_require__(66),
+	    isTypedArray = __webpack_require__(67);
 	
 	/** Used for built-in method references. */
 	var objectProto = Object.prototype;
@@ -2258,7 +2698,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 54 */
+/* 58 */
 /***/ function(module, exports) {
 
 	/**
@@ -2284,11 +2724,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 55 */
+/* 59 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseIsArguments = __webpack_require__(56),
-	    isObjectLike = __webpack_require__(57);
+	var baseIsArguments = __webpack_require__(60),
+	    isObjectLike = __webpack_require__(61);
 	
 	/** Used for built-in method references. */
 	var objectProto = Object.prototype;
@@ -2326,23 +2766,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 56 */
+/* 60 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isObjectLike = __webpack_require__(57);
+	var baseGetTag = __webpack_require__(24),
+	    isObjectLike = __webpack_require__(61);
 	
 	/** `Object#toString` result references. */
 	var argsTag = '[object Arguments]';
-	
-	/** Used for built-in method references. */
-	var objectProto = Object.prototype;
-	
-	/**
-	 * Used to resolve the
-	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
-	 * of values.
-	 */
-	var objectToString = objectProto.toString;
 	
 	/**
 	 * The base implementation of `_.isArguments`.
@@ -2352,14 +2783,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * @returns {boolean} Returns `true` if `value` is an `arguments` object,
 	 */
 	function baseIsArguments(value) {
-	  return isObjectLike(value) && objectToString.call(value) == argsTag;
+	  return isObjectLike(value) && baseGetTag(value) == argsTag;
 	}
 	
 	module.exports = baseIsArguments;
 
 
 /***/ },
-/* 57 */
+/* 61 */
 /***/ function(module, exports) {
 
 	/**
@@ -2394,7 +2825,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 58 */
+/* 62 */
 /***/ function(module, exports) {
 
 	/**
@@ -2426,11 +2857,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 59 */
+/* 63 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(module) {var root = __webpack_require__(27),
-	    stubFalse = __webpack_require__(61);
+	/* WEBPACK VAR INJECTION */(function(module) {var root = __webpack_require__(26),
+	    stubFalse = __webpack_require__(65);
 	
 	/** Detect free variable `exports`. */
 	var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
@@ -2468,10 +2899,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	module.exports = isBuffer;
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(60)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(64)(module)))
 
 /***/ },
-/* 60 */
+/* 64 */
 /***/ function(module, exports) {
 
 	module.exports = function(module) {
@@ -2487,7 +2918,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 61 */
+/* 65 */
 /***/ function(module, exports) {
 
 	/**
@@ -2511,7 +2942,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 62 */
+/* 66 */
 /***/ function(module, exports) {
 
 	/** Used as references for various `Number` constants. */
@@ -2539,12 +2970,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 63 */
+/* 67 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseIsTypedArray = __webpack_require__(64),
-	    baseUnary = __webpack_require__(66),
-	    nodeUtil = __webpack_require__(67);
+	var baseIsTypedArray = __webpack_require__(68),
+	    baseUnary = __webpack_require__(70),
+	    nodeUtil = __webpack_require__(71);
 	
 	/* Node.js helper references. */
 	var nodeIsTypedArray = nodeUtil && nodeUtil.isTypedArray;
@@ -2572,11 +3003,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 64 */
+/* 68 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isLength = __webpack_require__(65),
-	    isObjectLike = __webpack_require__(57);
+	var baseGetTag = __webpack_require__(24),
+	    isLength = __webpack_require__(69),
+	    isObjectLike = __webpack_require__(61);
 	
 	/** `Object#toString` result references. */
 	var argsTag = '[object Arguments]',
@@ -2621,16 +3053,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	typedArrayTags[setTag] = typedArrayTags[stringTag] =
 	typedArrayTags[weakMapTag] = false;
 	
-	/** Used for built-in method references. */
-	var objectProto = Object.prototype;
-	
-	/**
-	 * Used to resolve the
-	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
-	 * of values.
-	 */
-	var objectToString = objectProto.toString;
-	
 	/**
 	 * The base implementation of `_.isTypedArray` without Node.js optimizations.
 	 *
@@ -2640,14 +3062,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function baseIsTypedArray(value) {
 	  return isObjectLike(value) &&
-	    isLength(value.length) && !!typedArrayTags[objectToString.call(value)];
+	    isLength(value.length) && !!typedArrayTags[baseGetTag(value)];
 	}
 	
 	module.exports = baseIsTypedArray;
 
 
 /***/ },
-/* 65 */
+/* 69 */
 /***/ function(module, exports) {
 
 	/** Used as references for various `Number` constants. */
@@ -2688,7 +3110,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 66 */
+/* 70 */
 /***/ function(module, exports) {
 
 	/**
@@ -2708,10 +3130,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 67 */
+/* 71 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(module) {var freeGlobal = __webpack_require__(28);
+	/* WEBPACK VAR INJECTION */(function(module) {var freeGlobal = __webpack_require__(27);
 	
 	/** Detect free variable `exports`. */
 	var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
@@ -2728,20 +3150,20 @@ return /******/ (function(modules) { // webpackBootstrap
 	/** Used to access faster Node.js helpers. */
 	var nodeUtil = (function() {
 	  try {
-	    return freeProcess && freeProcess.binding('util');
+	    return freeProcess && freeProcess.binding && freeProcess.binding('util');
 	  } catch (e) {}
 	}());
 	
 	module.exports = nodeUtil;
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(60)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(64)(module)))
 
 /***/ },
-/* 68 */
+/* 72 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isPrototype = __webpack_require__(69),
-	    nativeKeys = __webpack_require__(70);
+	var isPrototype = __webpack_require__(73),
+	    nativeKeys = __webpack_require__(74);
 	
 	/** Used for built-in method references. */
 	var objectProto = Object.prototype;
@@ -2773,7 +3195,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 69 */
+/* 73 */
 /***/ function(module, exports) {
 
 	/** Used for built-in method references. */
@@ -2797,10 +3219,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 70 */
+/* 74 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var overArg = __webpack_require__(71);
+	var overArg = __webpack_require__(75);
 	
 	/* Built-in method references for those with the same name as other `lodash` methods. */
 	var nativeKeys = overArg(Object.keys, Object);
@@ -2809,7 +3231,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 71 */
+/* 75 */
 /***/ function(module, exports) {
 
 	/**
@@ -2830,11 +3252,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 72 */
+/* 76 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var isFunction = __webpack_require__(23),
-	    isLength = __webpack_require__(65);
+	    isLength = __webpack_require__(69);
 	
 	/**
 	 * Checks if `value` is array-like. A value is considered array-like if it's
@@ -2869,10 +3291,136 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 73 */
+/* 77 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(module) {var root = __webpack_require__(27);
+	var copyObject = __webpack_require__(55),
+	    keysIn = __webpack_require__(78);
+	
+	/**
+	 * The base implementation of `_.assignIn` without support for multiple sources
+	 * or `customizer` functions.
+	 *
+	 * @private
+	 * @param {Object} object The destination object.
+	 * @param {Object} source The source object.
+	 * @returns {Object} Returns `object`.
+	 */
+	function baseAssignIn(object, source) {
+	  return object && copyObject(source, keysIn(source), object);
+	}
+	
+	module.exports = baseAssignIn;
+
+
+/***/ },
+/* 78 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var arrayLikeKeys = __webpack_require__(57),
+	    baseKeysIn = __webpack_require__(79),
+	    isArrayLike = __webpack_require__(76);
+	
+	/**
+	 * Creates an array of the own and inherited enumerable property names of `object`.
+	 *
+	 * **Note:** Non-object values are coerced to objects.
+	 *
+	 * @static
+	 * @memberOf _
+	 * @since 3.0.0
+	 * @category Object
+	 * @param {Object} object The object to query.
+	 * @returns {Array} Returns the array of property names.
+	 * @example
+	 *
+	 * function Foo() {
+	 *   this.a = 1;
+	 *   this.b = 2;
+	 * }
+	 *
+	 * Foo.prototype.c = 3;
+	 *
+	 * _.keysIn(new Foo);
+	 * // => ['a', 'b', 'c'] (iteration order is not guaranteed)
+	 */
+	function keysIn(object) {
+	  return isArrayLike(object) ? arrayLikeKeys(object, true) : baseKeysIn(object);
+	}
+	
+	module.exports = keysIn;
+
+
+/***/ },
+/* 79 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var isObject = __webpack_require__(30),
+	    isPrototype = __webpack_require__(73),
+	    nativeKeysIn = __webpack_require__(80);
+	
+	/** Used for built-in method references. */
+	var objectProto = Object.prototype;
+	
+	/** Used to check objects for own properties. */
+	var hasOwnProperty = objectProto.hasOwnProperty;
+	
+	/**
+	 * The base implementation of `_.keysIn` which doesn't treat sparse arrays as dense.
+	 *
+	 * @private
+	 * @param {Object} object The object to query.
+	 * @returns {Array} Returns the array of property names.
+	 */
+	function baseKeysIn(object) {
+	  if (!isObject(object)) {
+	    return nativeKeysIn(object);
+	  }
+	  var isProto = isPrototype(object),
+	      result = [];
+	
+	  for (var key in object) {
+	    if (!(key == 'constructor' && (isProto || !hasOwnProperty.call(object, key)))) {
+	      result.push(key);
+	    }
+	  }
+	  return result;
+	}
+	
+	module.exports = baseKeysIn;
+
+
+/***/ },
+/* 80 */
+/***/ function(module, exports) {
+
+	/**
+	 * This function is like
+	 * [`Object.keys`](http://ecma-international.org/ecma-262/7.0/#sec-object.keys)
+	 * except that it includes inherited enumerable properties.
+	 *
+	 * @private
+	 * @param {Object} object The object to query.
+	 * @returns {Array} Returns the array of property names.
+	 */
+	function nativeKeysIn(object) {
+	  var result = [];
+	  if (object != null) {
+	    for (var key in Object(object)) {
+	      result.push(key);
+	    }
+	  }
+	  return result;
+	}
+	
+	module.exports = nativeKeysIn;
+
+
+/***/ },
+/* 81 */
+/***/ function(module, exports, __webpack_require__) {
+
+	/* WEBPACK VAR INJECTION */(function(module) {var root = __webpack_require__(26);
 	
 	/** Detect free variable `exports`. */
 	var freeExports = typeof exports == 'object' && exports && !exports.nodeType && exports;
@@ -2908,10 +3456,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 	module.exports = cloneBuffer;
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(60)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(64)(module)))
 
 /***/ },
-/* 74 */
+/* 82 */
 /***/ function(module, exports) {
 
 	/**
@@ -2937,14 +3485,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 75 */
+/* 83 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var copyObject = __webpack_require__(51),
-	    getSymbols = __webpack_require__(76);
+	var copyObject = __webpack_require__(55),
+	    getSymbols = __webpack_require__(84);
 	
 	/**
-	 * Copies own symbol properties of `source` to `object`.
+	 * Copies own symbols of `source` to `object`.
 	 *
 	 * @private
 	 * @param {Object} source The object to copy symbols from.
@@ -2959,17 +3507,17 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 76 */
+/* 84 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var overArg = __webpack_require__(71),
-	    stubArray = __webpack_require__(77);
+	var overArg = __webpack_require__(75),
+	    stubArray = __webpack_require__(85);
 	
 	/* Built-in method references for those with the same name as other `lodash` methods. */
 	var nativeGetSymbols = Object.getOwnPropertySymbols;
 	
 	/**
-	 * Creates an array of the own enumerable symbol properties of `object`.
+	 * Creates an array of the own enumerable symbols of `object`.
 	 *
 	 * @private
 	 * @param {Object} object The object to query.
@@ -2981,7 +3529,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 77 */
+/* 85 */
 /***/ function(module, exports) {
 
 	/**
@@ -3010,55 +3558,60 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 78 */
+/* 86 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseGetAllKeys = __webpack_require__(79),
-	    getSymbols = __webpack_require__(76),
-	    keys = __webpack_require__(52);
+	var copyObject = __webpack_require__(55),
+	    getSymbolsIn = __webpack_require__(87);
 	
 	/**
-	 * Creates an array of own enumerable property names and symbols of `object`.
+	 * Copies own and inherited symbols of `source` to `object`.
 	 *
 	 * @private
-	 * @param {Object} object The object to query.
-	 * @returns {Array} Returns the array of property names and symbols.
+	 * @param {Object} source The object to copy symbols from.
+	 * @param {Object} [object={}] The object to copy symbols to.
+	 * @returns {Object} Returns `object`.
 	 */
-	function getAllKeys(object) {
-	  return baseGetAllKeys(object, keys, getSymbols);
+	function copySymbolsIn(source, object) {
+	  return copyObject(source, getSymbolsIn(source), object);
 	}
 	
-	module.exports = getAllKeys;
+	module.exports = copySymbolsIn;
 
 
 /***/ },
-/* 79 */
+/* 87 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var arrayPush = __webpack_require__(80),
-	    isArray = __webpack_require__(58);
+	var arrayPush = __webpack_require__(88),
+	    getPrototype = __webpack_require__(89),
+	    getSymbols = __webpack_require__(84),
+	    stubArray = __webpack_require__(85);
+	
+	/* Built-in method references for those with the same name as other `lodash` methods. */
+	var nativeGetSymbols = Object.getOwnPropertySymbols;
 	
 	/**
-	 * The base implementation of `getAllKeys` and `getAllKeysIn` which uses
-	 * `keysFunc` and `symbolsFunc` to get the enumerable property names and
-	 * symbols of `object`.
+	 * Creates an array of the own and inherited enumerable symbols of `object`.
 	 *
 	 * @private
 	 * @param {Object} object The object to query.
-	 * @param {Function} keysFunc The function to get the keys of `object`.
-	 * @param {Function} symbolsFunc The function to get the symbols of `object`.
-	 * @returns {Array} Returns the array of property names and symbols.
+	 * @returns {Array} Returns the array of symbols.
 	 */
-	function baseGetAllKeys(object, keysFunc, symbolsFunc) {
-	  var result = keysFunc(object);
-	  return isArray(object) ? result : arrayPush(result, symbolsFunc(object));
-	}
+	var getSymbolsIn = !nativeGetSymbols ? stubArray : function(object) {
+	  var result = [];
+	  while (object) {
+	    arrayPush(result, getSymbols(object));
+	    object = getPrototype(object);
+	  }
+	  return result;
+	};
 	
-	module.exports = baseGetAllKeys;
+	module.exports = getSymbolsIn;
 
 
 /***/ },
-/* 80 */
+/* 88 */
 /***/ function(module, exports) {
 
 	/**
@@ -3084,16 +3637,99 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 81 */
+/* 89 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var DataView = __webpack_require__(82),
+	var overArg = __webpack_require__(75);
+	
+	/** Built-in value references. */
+	var getPrototype = overArg(Object.getPrototypeOf, Object);
+	
+	module.exports = getPrototype;
+
+
+/***/ },
+/* 90 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var baseGetAllKeys = __webpack_require__(91),
+	    getSymbols = __webpack_require__(84),
+	    keys = __webpack_require__(56);
+	
+	/**
+	 * Creates an array of own enumerable property names and symbols of `object`.
+	 *
+	 * @private
+	 * @param {Object} object The object to query.
+	 * @returns {Array} Returns the array of property names and symbols.
+	 */
+	function getAllKeys(object) {
+	  return baseGetAllKeys(object, keys, getSymbols);
+	}
+	
+	module.exports = getAllKeys;
+
+
+/***/ },
+/* 91 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var arrayPush = __webpack_require__(88),
+	    isArray = __webpack_require__(62);
+	
+	/**
+	 * The base implementation of `getAllKeys` and `getAllKeysIn` which uses
+	 * `keysFunc` and `symbolsFunc` to get the enumerable property names and
+	 * symbols of `object`.
+	 *
+	 * @private
+	 * @param {Object} object The object to query.
+	 * @param {Function} keysFunc The function to get the keys of `object`.
+	 * @param {Function} symbolsFunc The function to get the symbols of `object`.
+	 * @returns {Array} Returns the array of property names and symbols.
+	 */
+	function baseGetAllKeys(object, keysFunc, symbolsFunc) {
+	  var result = keysFunc(object);
+	  return isArray(object) ? result : arrayPush(result, symbolsFunc(object));
+	}
+	
+	module.exports = baseGetAllKeys;
+
+
+/***/ },
+/* 92 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var baseGetAllKeys = __webpack_require__(91),
+	    getSymbolsIn = __webpack_require__(87),
+	    keysIn = __webpack_require__(78);
+	
+	/**
+	 * Creates an array of own and inherited enumerable property names and
+	 * symbols of `object`.
+	 *
+	 * @private
+	 * @param {Object} object The object to query.
+	 * @returns {Array} Returns the array of property names and symbols.
+	 */
+	function getAllKeysIn(object) {
+	  return baseGetAllKeys(object, keysIn, getSymbolsIn);
+	}
+	
+	module.exports = getAllKeysIn;
+
+
+/***/ },
+/* 93 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var DataView = __webpack_require__(94),
 	    Map = __webpack_require__(20),
-	    Promise = __webpack_require__(83),
-	    Set = __webpack_require__(84),
-	    WeakMap = __webpack_require__(85),
-	    baseGetTag = __webpack_require__(86),
-	    toSource = __webpack_require__(29);
+	    Promise = __webpack_require__(95),
+	    Set = __webpack_require__(96),
+	    WeakMap = __webpack_require__(97),
+	    baseGetTag = __webpack_require__(24),
+	    toSource = __webpack_require__(33);
 	
 	/** `Object#toString` result references. */
 	var mapTag = '[object Map]',
@@ -3103,16 +3739,6 @@ return /******/ (function(modules) { // webpackBootstrap
 	    weakMapTag = '[object WeakMap]';
 	
 	var dataViewTag = '[object DataView]';
-	
-	/** Used for built-in method references. */
-	var objectProto = Object.prototype;
-	
-	/**
-	 * Used to resolve the
-	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
-	 * of values.
-	 */
-	var objectToString = objectProto.toString;
 	
 	/** Used to detect maps, sets, and weakmaps. */
 	var dataViewCtorString = toSource(DataView),
@@ -3137,9 +3763,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	    (Set && getTag(new Set) != setTag) ||
 	    (WeakMap && getTag(new WeakMap) != weakMapTag)) {
 	  getTag = function(value) {
-	    var result = objectToString.call(value),
+	    var result = baseGetTag(value),
 	        Ctor = result == objectTag ? value.constructor : undefined,
-	        ctorString = Ctor ? toSource(Ctor) : undefined;
+	        ctorString = Ctor ? toSource(Ctor) : '';
 	
 	    if (ctorString) {
 	      switch (ctorString) {
@@ -3158,11 +3784,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 82 */
+/* 94 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21),
-	    root = __webpack_require__(27);
+	    root = __webpack_require__(26);
 	
 	/* Built-in method references that are verified to be native. */
 	var DataView = getNative(root, 'DataView');
@@ -3171,11 +3797,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 83 */
+/* 95 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21),
-	    root = __webpack_require__(27);
+	    root = __webpack_require__(26);
 	
 	/* Built-in method references that are verified to be native. */
 	var Promise = getNative(root, 'Promise');
@@ -3184,11 +3810,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 84 */
+/* 96 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21),
-	    root = __webpack_require__(27);
+	    root = __webpack_require__(26);
 	
 	/* Built-in method references that are verified to be native. */
 	var Set = getNative(root, 'Set');
@@ -3197,11 +3823,11 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 85 */
+/* 97 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var getNative = __webpack_require__(21),
-	    root = __webpack_require__(27);
+	    root = __webpack_require__(26);
 	
 	/* Built-in method references that are verified to be native. */
 	var WeakMap = getNative(root, 'WeakMap');
@@ -3210,35 +3836,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 86 */
-/***/ function(module, exports) {
-
-	/** Used for built-in method references. */
-	var objectProto = Object.prototype;
-	
-	/**
-	 * Used to resolve the
-	 * [`toStringTag`](http://ecma-international.org/ecma-262/7.0/#sec-object.prototype.tostring)
-	 * of values.
-	 */
-	var objectToString = objectProto.toString;
-	
-	/**
-	 * The base implementation of `getTag`.
-	 *
-	 * @private
-	 * @param {*} value The value to query.
-	 * @returns {string} Returns the `toStringTag`.
-	 */
-	function baseGetTag(value) {
-	  return objectToString.call(value);
-	}
-	
-	module.exports = baseGetTag;
-
-
-/***/ },
-/* 87 */
+/* 98 */
 /***/ function(module, exports) {
 
 	/** Used for built-in method references. */
@@ -3270,16 +3868,16 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 88 */
+/* 99 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var cloneArrayBuffer = __webpack_require__(89),
-	    cloneDataView = __webpack_require__(91),
-	    cloneMap = __webpack_require__(92),
-	    cloneRegExp = __webpack_require__(96),
-	    cloneSet = __webpack_require__(97),
-	    cloneSymbol = __webpack_require__(100),
-	    cloneTypedArray = __webpack_require__(102);
+	var cloneArrayBuffer = __webpack_require__(100),
+	    cloneDataView = __webpack_require__(102),
+	    cloneMap = __webpack_require__(103),
+	    cloneRegExp = __webpack_require__(107),
+	    cloneSet = __webpack_require__(108),
+	    cloneSymbol = __webpack_require__(111),
+	    cloneTypedArray = __webpack_require__(112);
 	
 	/** `Object#toString` result references. */
 	var boolTag = '[object Boolean]',
@@ -3356,10 +3954,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 89 */
+/* 100 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Uint8Array = __webpack_require__(90);
+	var Uint8Array = __webpack_require__(101);
 	
 	/**
 	 * Creates a clone of `arrayBuffer`.
@@ -3378,10 +3976,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 90 */
+/* 101 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var root = __webpack_require__(27);
+	var root = __webpack_require__(26);
 	
 	/** Built-in value references. */
 	var Uint8Array = root.Uint8Array;
@@ -3390,10 +3988,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 91 */
+/* 102 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var cloneArrayBuffer = __webpack_require__(89);
+	var cloneArrayBuffer = __webpack_require__(100);
 	
 	/**
 	 * Creates a clone of `dataView`.
@@ -3412,12 +4010,15 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 92 */
+/* 103 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var addMapEntry = __webpack_require__(93),
-	    arrayReduce = __webpack_require__(94),
-	    mapToArray = __webpack_require__(95);
+	var addMapEntry = __webpack_require__(104),
+	    arrayReduce = __webpack_require__(105),
+	    mapToArray = __webpack_require__(106);
+	
+	/** Used to compose bitmasks for cloning. */
+	var CLONE_DEEP_FLAG = 1;
 	
 	/**
 	 * Creates a clone of `map`.
@@ -3429,7 +4030,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * @returns {Object} Returns the cloned map.
 	 */
 	function cloneMap(map, isDeep, cloneFunc) {
-	  var array = isDeep ? cloneFunc(mapToArray(map), true) : mapToArray(map);
+	  var array = isDeep ? cloneFunc(mapToArray(map), CLONE_DEEP_FLAG) : mapToArray(map);
 	  return arrayReduce(array, addMapEntry, new map.constructor);
 	}
 	
@@ -3437,7 +4038,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 93 */
+/* 104 */
 /***/ function(module, exports) {
 
 	/**
@@ -3458,7 +4059,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 94 */
+/* 105 */
 /***/ function(module, exports) {
 
 	/**
@@ -3475,7 +4076,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 */
 	function arrayReduce(array, iteratee, accumulator, initAccum) {
 	  var index = -1,
-	      length = array ? array.length : 0;
+	      length = array == null ? 0 : array.length;
 	
 	  if (initAccum && length) {
 	    accumulator = array[++index];
@@ -3490,7 +4091,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 95 */
+/* 106 */
 /***/ function(module, exports) {
 
 	/**
@@ -3514,7 +4115,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 96 */
+/* 107 */
 /***/ function(module, exports) {
 
 	/** Used to match `RegExp` flags from their coerced string values. */
@@ -3537,12 +4138,15 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 97 */
+/* 108 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var addSetEntry = __webpack_require__(98),
-	    arrayReduce = __webpack_require__(94),
-	    setToArray = __webpack_require__(99);
+	var addSetEntry = __webpack_require__(109),
+	    arrayReduce = __webpack_require__(105),
+	    setToArray = __webpack_require__(110);
+	
+	/** Used to compose bitmasks for cloning. */
+	var CLONE_DEEP_FLAG = 1;
 	
 	/**
 	 * Creates a clone of `set`.
@@ -3554,7 +4158,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	 * @returns {Object} Returns the cloned set.
 	 */
 	function cloneSet(set, isDeep, cloneFunc) {
-	  var array = isDeep ? cloneFunc(setToArray(set), true) : setToArray(set);
+	  var array = isDeep ? cloneFunc(setToArray(set), CLONE_DEEP_FLAG) : setToArray(set);
 	  return arrayReduce(array, addSetEntry, new set.constructor);
 	}
 	
@@ -3562,7 +4166,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 98 */
+/* 109 */
 /***/ function(module, exports) {
 
 	/**
@@ -3583,7 +4187,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 99 */
+/* 110 */
 /***/ function(module, exports) {
 
 	/**
@@ -3607,10 +4211,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 100 */
+/* 111 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var Symbol = __webpack_require__(101);
+	var Symbol = __webpack_require__(25);
 	
 	/** Used to convert symbols to primitives and strings. */
 	var symbolProto = Symbol ? Symbol.prototype : undefined,
@@ -3631,22 +4235,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 101 */
+/* 112 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var root = __webpack_require__(27);
-	
-	/** Built-in value references. */
-	var Symbol = root.Symbol;
-	
-	module.exports = Symbol;
-
-
-/***/ },
-/* 102 */
-/***/ function(module, exports, __webpack_require__) {
-
-	var cloneArrayBuffer = __webpack_require__(89);
+	var cloneArrayBuffer = __webpack_require__(100);
 	
 	/**
 	 * Creates a clone of `typedArray`.
@@ -3665,12 +4257,12 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 103 */
+/* 113 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var baseCreate = __webpack_require__(104),
-	    getPrototype = __webpack_require__(105),
-	    isPrototype = __webpack_require__(69);
+	var baseCreate = __webpack_require__(114),
+	    getPrototype = __webpack_require__(89),
+	    isPrototype = __webpack_require__(73);
 	
 	/**
 	 * Initializes an object clone.
@@ -3689,10 +4281,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 104 */
+/* 114 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var isObject = __webpack_require__(24);
+	var isObject = __webpack_require__(30);
 	
 	/** Built-in value references. */
 	var objectCreate = Object.create;
@@ -3725,503 +4317,682 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 105 */
+/* 115 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var overArg = __webpack_require__(71);
+	var arrayEach = __webpack_require__(50),
+	    baseEach = __webpack_require__(116),
+	    castFunction = __webpack_require__(121),
+	    isArray = __webpack_require__(62);
 	
-	/** Built-in value references. */
-	var getPrototype = overArg(Object.getPrototypeOf, Object);
+	/**
+	 * Iterates over elements of `collection` and invokes `iteratee` for each element.
+	 * The iteratee is invoked with three arguments: (value, index|key, collection).
+	 * Iteratee functions may exit iteration early by explicitly returning `false`.
+	 *
+	 * **Note:** As with other "Collections" methods, objects with a "length"
+	 * property are iterated like arrays. To avoid this behavior use `_.forIn`
+	 * or `_.forOwn` for object iteration.
+	 *
+	 * @static
+	 * @memberOf _
+	 * @since 0.1.0
+	 * @alias each
+	 * @category Collection
+	 * @param {Array|Object} collection The collection to iterate over.
+	 * @param {Function} [iteratee=_.identity] The function invoked per iteration.
+	 * @returns {Array|Object} Returns `collection`.
+	 * @see _.forEachRight
+	 * @example
+	 *
+	 * _.forEach([1, 2], function(value) {
+	 *   console.log(value);
+	 * });
+	 * // => Logs `1` then `2`.
+	 *
+	 * _.forEach({ 'a': 1, 'b': 2 }, function(value, key) {
+	 *   console.log(key);
+	 * });
+	 * // => Logs 'a' then 'b' (iteration order is not guaranteed).
+	 */
+	function forEach(collection, iteratee) {
+	  var func = isArray(collection) ? arrayEach : baseEach;
+	  return func(collection, castFunction(iteratee));
+	}
 	
-	module.exports = getPrototype;
+	module.exports = forEach;
 
 
 /***/ },
-/* 106 */
+/* 116 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var baseForOwn = __webpack_require__(117),
+	    createBaseEach = __webpack_require__(120);
+	
+	/**
+	 * The base implementation of `_.forEach` without support for iteratee shorthands.
+	 *
+	 * @private
+	 * @param {Array|Object} collection The collection to iterate over.
+	 * @param {Function} iteratee The function invoked per iteration.
+	 * @returns {Array|Object} Returns `collection`.
+	 */
+	var baseEach = createBaseEach(baseForOwn);
+	
+	module.exports = baseEach;
+
+
+/***/ },
+/* 117 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var baseFor = __webpack_require__(118),
+	    keys = __webpack_require__(56);
+	
+	/**
+	 * The base implementation of `_.forOwn` without support for iteratee shorthands.
+	 *
+	 * @private
+	 * @param {Object} object The object to iterate over.
+	 * @param {Function} iteratee The function invoked per iteration.
+	 * @returns {Object} Returns `object`.
+	 */
+	function baseForOwn(object, iteratee) {
+	  return object && baseFor(object, iteratee, keys);
+	}
+	
+	module.exports = baseForOwn;
+
+
+/***/ },
+/* 118 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var createBaseFor = __webpack_require__(119);
+	
+	/**
+	 * The base implementation of `baseForOwn` which iterates over `object`
+	 * properties returned by `keysFunc` and invokes `iteratee` for each property.
+	 * Iteratee functions may exit iteration early by explicitly returning `false`.
+	 *
+	 * @private
+	 * @param {Object} object The object to iterate over.
+	 * @param {Function} iteratee The function invoked per iteration.
+	 * @param {Function} keysFunc The function to get the keys of `object`.
+	 * @returns {Object} Returns `object`.
+	 */
+	var baseFor = createBaseFor();
+	
+	module.exports = baseFor;
+
+
+/***/ },
+/* 119 */
+/***/ function(module, exports) {
+
+	/**
+	 * Creates a base function for methods like `_.forIn` and `_.forOwn`.
+	 *
+	 * @private
+	 * @param {boolean} [fromRight] Specify iterating from right to left.
+	 * @returns {Function} Returns the new base function.
+	 */
+	function createBaseFor(fromRight) {
+	  return function(object, iteratee, keysFunc) {
+	    var index = -1,
+	        iterable = Object(object),
+	        props = keysFunc(object),
+	        length = props.length;
+	
+	    while (length--) {
+	      var key = props[fromRight ? length : ++index];
+	      if (iteratee(iterable[key], key, iterable) === false) {
+	        break;
+	      }
+	    }
+	    return object;
+	  };
+	}
+	
+	module.exports = createBaseFor;
+
+
+/***/ },
+/* 120 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var isArrayLike = __webpack_require__(76);
+	
+	/**
+	 * Creates a `baseEach` or `baseEachRight` function.
+	 *
+	 * @private
+	 * @param {Function} eachFunc The function to iterate over a collection.
+	 * @param {boolean} [fromRight] Specify iterating from right to left.
+	 * @returns {Function} Returns the new base function.
+	 */
+	function createBaseEach(eachFunc, fromRight) {
+	  return function(collection, iteratee) {
+	    if (collection == null) {
+	      return collection;
+	    }
+	    if (!isArrayLike(collection)) {
+	      return eachFunc(collection, iteratee);
+	    }
+	    var length = collection.length,
+	        index = fromRight ? length : -1,
+	        iterable = Object(collection);
+	
+	    while ((fromRight ? index-- : ++index < length)) {
+	      if (iteratee(iterable[index], index, iterable) === false) {
+	        break;
+	      }
+	    }
+	    return collection;
+	  };
+	}
+	
+	module.exports = createBaseEach;
+
+
+/***/ },
+/* 121 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var identity = __webpack_require__(122);
+	
+	/**
+	 * Casts `value` to `identity` if it's not a function.
+	 *
+	 * @private
+	 * @param {*} value The value to inspect.
+	 * @returns {Function} Returns cast function.
+	 */
+	function castFunction(value) {
+	  return typeof value == 'function' ? value : identity;
+	}
+	
+	module.exports = castFunction;
+
+
+/***/ },
+/* 122 */
+/***/ function(module, exports) {
+
+	/**
+	 * This method returns the first argument it receives.
+	 *
+	 * @static
+	 * @since 0.1.0
+	 * @memberOf _
+	 * @category Util
+	 * @param {*} value Any value.
+	 * @returns {*} Returns `value`.
+	 * @example
+	 *
+	 * var object = { 'a': 1 };
+	 *
+	 * console.log(_.identity(object) === object);
+	 * // => true
+	 */
+	function identity(value) {
+	  return value;
+	}
+	
+	module.exports = identity;
+
+
+/***/ },
+/* 123 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var __WEBPACK_AMD_DEFINE_RESULT__;/*!
-	 * EventEmitter v4.2.11 - git.io/ee
-	 * Unlicense - http://unlicense.org/
-	 * Oliver Caldwell - http://oli.me.uk/
+	 * EventEmitter v4.2.0 - git.io/ee
+	 * Oliver Caldwell
+	 * MIT license
 	 * @preserve
 	 */
 	
-	;(function () {
-	    'use strict';
+	(function () {
+		// Place the script in strict mode
+		'use strict';
 	
-	    /**
-	     * Class for managing events.
-	     * Can be extended to provide event functionality in other classes.
-	     *
-	     * @class EventEmitter Manages event registering and emitting.
-	     */
-	    function EventEmitter() {}
+		/**
+		 * Class for managing events.
+		 * Can be extended to provide event functionality in other classes.
+		 *
+		 * @class EventEmitter Manages event registering and emitting.
+		 */
+		function EventEmitter() {}
 	
-	    // Shortcuts to improve speed and size
-	    var proto = EventEmitter.prototype;
-	    var exports = this;
-	    var originalGlobalValue = exports.EventEmitter;
+		// Shortcuts to improve speed and size
 	
-	    /**
-	     * Finds the index of the listener for the event in its storage array.
-	     *
-	     * @param {Function[]} listeners Array of listeners to search through.
-	     * @param {Function} listener Method to look for.
-	     * @return {Number} Index of the specified listener, -1 if not found
-	     * @api private
-	     */
-	    function indexOfListener(listeners, listener) {
-	        var i = listeners.length;
-	        while (i--) {
-	            if (listeners[i].listener === listener) {
-	                return i;
-	            }
-	        }
+		// Easy access to the prototype
+		var proto = EventEmitter.prototype;
 	
-	        return -1;
-	    }
+		/**
+		 * Finds the index of the listener for the event in it's storage array.
+		 *
+		 * @param {Function[]} listeners Array of listeners to search through.
+		 * @param {Function} listener Method to look for.
+		 * @return {Number} Index of the specified listener, -1 if not found
+		 * @api private
+		 */
+		function indexOfListener(listeners, listener) {
+			var i = listeners.length;
+			while (i--) {
+				if (listeners[i].listener === listener) {
+					return i;
+				}
+			}
 	
-	    /**
-	     * Alias a method while keeping the context correct, to allow for overwriting of target method.
-	     *
-	     * @param {String} name The name of the target method.
-	     * @return {Function} The aliased method
-	     * @api private
-	     */
-	    function alias(name) {
-	        return function aliasClosure() {
-	            return this[name].apply(this, arguments);
-	        };
-	    }
+			return -1;
+		}
 	
-	    /**
-	     * Returns the listener array for the specified event.
-	     * Will initialise the event object and listener arrays if required.
-	     * Will return an object if you use a regex search. The object contains keys for each matched event. So /ba[rz]/ might return an object containing bar and baz. But only if you have either defined them with defineEvent or added some listeners to them.
-	     * Each property in the object response is an array of listener functions.
-	     *
-	     * @param {String|RegExp} evt Name of the event to return the listeners from.
-	     * @return {Function[]|Object} All listener functions for the event.
-	     */
-	    proto.getListeners = function getListeners(evt) {
-	        var events = this._getEvents();
-	        var response;
-	        var key;
+		/**
+		 * Returns the listener array for the specified event.
+		 * Will initialise the event object and listener arrays if required.
+		 * Will return an object if you use a regex search. The object contains keys for each matched event. So /ba[rz]/ might return an object containing bar and baz. But only if you have either defined them with defineEvent or added some listeners to them.
+		 * Each property in the object response is an array of listener functions.
+		 *
+		 * @param {String|RegExp} evt Name of the event to return the listeners from.
+		 * @return {Function[]|Object} All listener functions for the event.
+		 */
+		proto.getListeners = function getListeners(evt) {
+			var events = this._getEvents();
+			var response;
+			var key;
 	
-	        // Return a concatenated array of all matching events if
-	        // the selector is a regular expression.
-	        if (evt instanceof RegExp) {
-	            response = {};
-	            for (key in events) {
-	                if (events.hasOwnProperty(key) && evt.test(key)) {
-	                    response[key] = events[key];
-	                }
-	            }
-	        }
-	        else {
-	            response = events[evt] || (events[evt] = []);
-	        }
+			// Return a concatenated array of all matching events if
+			// the selector is a regular expression.
+			if (typeof evt === 'object') {
+				response = {};
+				for (key in events) {
+					if (events.hasOwnProperty(key) && evt.test(key)) {
+						response[key] = events[key];
+					}
+				}
+			}
+			else {
+				response = events[evt] || (events[evt] = []);
+			}
 	
-	        return response;
-	    };
+			return response;
+		};
 	
-	    /**
-	     * Takes a list of listener objects and flattens it into a list of listener functions.
-	     *
-	     * @param {Object[]} listeners Raw listener objects.
-	     * @return {Function[]} Just the listener functions.
-	     */
-	    proto.flattenListeners = function flattenListeners(listeners) {
-	        var flatListeners = [];
-	        var i;
+		/**
+		 * Takes a list of listener objects and flattens it into a list of listener functions.
+		 *
+		 * @param {Object[]} listeners Raw listener objects.
+		 * @return {Function[]} Just the listener functions.
+		 */
+		proto.flattenListeners = function flattenListeners(listeners) {
+			var flatListeners = [];
+			var i;
 	
-	        for (i = 0; i < listeners.length; i += 1) {
-	            flatListeners.push(listeners[i].listener);
-	        }
+			for (i = 0; i < listeners.length; i += 1) {
+				flatListeners.push(listeners[i].listener);
+			}
 	
-	        return flatListeners;
-	    };
+			return flatListeners;
+		};
 	
-	    /**
-	     * Fetches the requested listeners via getListeners but will always return the results inside an object. This is mainly for internal use but others may find it useful.
-	     *
-	     * @param {String|RegExp} evt Name of the event to return the listeners from.
-	     * @return {Object} All listener functions for an event in an object.
-	     */
-	    proto.getListenersAsObject = function getListenersAsObject(evt) {
-	        var listeners = this.getListeners(evt);
-	        var response;
+		/**
+		 * Fetches the requested listeners via getListeners but will always return the results inside an object. This is mainly for internal use but others may find it useful.
+		 *
+		 * @param {String|RegExp} evt Name of the event to return the listeners from.
+		 * @return {Object} All listener functions for an event in an object.
+		 */
+		proto.getListenersAsObject = function getListenersAsObject(evt) {
+			var listeners = this.getListeners(evt);
+			var response;
 	
-	        if (listeners instanceof Array) {
-	            response = {};
-	            response[evt] = listeners;
-	        }
+			if (listeners instanceof Array) {
+				response = {};
+				response[evt] = listeners;
+			}
 	
-	        return response || listeners;
-	    };
+			return response || listeners;
+		};
 	
-	    /**
-	     * Adds a listener function to the specified event.
-	     * The listener will not be added if it is a duplicate.
-	     * If the listener returns true then it will be removed after it is called.
-	     * If you pass a regular expression as the event name then the listener will be added to all events that match it.
-	     *
-	     * @param {String|RegExp} evt Name of the event to attach the listener to.
-	     * @param {Function} listener Method to be called when the event is emitted. If the function returns true then it will be removed after calling.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.addListener = function addListener(evt, listener) {
-	        var listeners = this.getListenersAsObject(evt);
-	        var listenerIsWrapped = typeof listener === 'object';
-	        var key;
+		/**
+		 * Adds a listener function to the specified event.
+		 * The listener will not be added if it is a duplicate.
+		 * If the listener returns true then it will be removed after it is called.
+		 * If you pass a regular expression as the event name then the listener will be added to all events that match it.
+		 *
+		 * @param {String|RegExp} evt Name of the event to attach the listener to.
+		 * @param {Function} listener Method to be called when the event is emitted. If the function returns true then it will be removed after calling.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.addListener = function addListener(evt, listener) {
+			var listeners = this.getListenersAsObject(evt);
+			var listenerIsWrapped = typeof listener === 'object';
+			var key;
 	
-	        for (key in listeners) {
-	            if (listeners.hasOwnProperty(key) && indexOfListener(listeners[key], listener) === -1) {
-	                listeners[key].push(listenerIsWrapped ? listener : {
-	                    listener: listener,
-	                    once: false
-	                });
-	            }
-	        }
+			for (key in listeners) {
+				if (listeners.hasOwnProperty(key) && indexOfListener(listeners[key], listener) === -1) {
+					listeners[key].push(listenerIsWrapped ? listener : {
+						listener: listener,
+						once: false
+					});
+				}
+			}
 	
-	        return this;
-	    };
+			return this;
+		};
 	
-	    /**
-	     * Alias of addListener
-	     */
-	    proto.on = alias('addListener');
+		/**
+		 * Alias of addListener
+		 */
+		proto.on = proto.addListener;
 	
-	    /**
-	     * Semi-alias of addListener. It will add a listener that will be
-	     * automatically removed after its first execution.
-	     *
-	     * @param {String|RegExp} evt Name of the event to attach the listener to.
-	     * @param {Function} listener Method to be called when the event is emitted. If the function returns true then it will be removed after calling.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.addOnceListener = function addOnceListener(evt, listener) {
-	        return this.addListener(evt, {
-	            listener: listener,
-	            once: true
-	        });
-	    };
+		/**
+		 * Semi-alias of addListener. It will add a listener that will be
+		 * automatically removed after it's first execution.
+		 *
+		 * @param {String|RegExp} evt Name of the event to attach the listener to.
+		 * @param {Function} listener Method to be called when the event is emitted. If the function returns true then it will be removed after calling.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.addOnceListener = function addOnceListener(evt, listener) {
+			return this.addListener(evt, {
+				listener: listener,
+				once: true
+			});
+		};
 	
-	    /**
-	     * Alias of addOnceListener.
-	     */
-	    proto.once = alias('addOnceListener');
+		/**
+		 * Alias of addOnceListener.
+		 */
+		proto.once = proto.addOnceListener;
 	
-	    /**
-	     * Defines an event name. This is required if you want to use a regex to add a listener to multiple events at once. If you don't do this then how do you expect it to know what event to add to? Should it just add to every possible match for a regex? No. That is scary and bad.
-	     * You need to tell it what event names should be matched by a regex.
-	     *
-	     * @param {String} evt Name of the event to create.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.defineEvent = function defineEvent(evt) {
-	        this.getListeners(evt);
-	        return this;
-	    };
+		/**
+		 * Defines an event name. This is required if you want to use a regex to add a listener to multiple events at once. If you don't do this then how do you expect it to know what event to add to? Should it just add to every possible match for a regex? No. That is scary and bad.
+		 * You need to tell it what event names should be matched by a regex.
+		 *
+		 * @param {String} evt Name of the event to create.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.defineEvent = function defineEvent(evt) {
+			this.getListeners(evt);
+			return this;
+		};
 	
-	    /**
-	     * Uses defineEvent to define multiple events.
-	     *
-	     * @param {String[]} evts An array of event names to define.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.defineEvents = function defineEvents(evts) {
-	        for (var i = 0; i < evts.length; i += 1) {
-	            this.defineEvent(evts[i]);
-	        }
-	        return this;
-	    };
+		/**
+		 * Uses defineEvent to define multiple events.
+		 *
+		 * @param {String[]} evts An array of event names to define.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.defineEvents = function defineEvents(evts) {
+			for (var i = 0; i < evts.length; i += 1) {
+				this.defineEvent(evts[i]);
+			}
+			return this;
+		};
 	
-	    /**
-	     * Removes a listener function from the specified event.
-	     * When passed a regular expression as the event name, it will remove the listener from all events that match it.
-	     *
-	     * @param {String|RegExp} evt Name of the event to remove the listener from.
-	     * @param {Function} listener Method to remove from the event.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.removeListener = function removeListener(evt, listener) {
-	        var listeners = this.getListenersAsObject(evt);
-	        var index;
-	        var key;
+		/**
+		 * Removes a listener function from the specified event.
+		 * When passed a regular expression as the event name, it will remove the listener from all events that match it.
+		 *
+		 * @param {String|RegExp} evt Name of the event to remove the listener from.
+		 * @param {Function} listener Method to remove from the event.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.removeListener = function removeListener(evt, listener) {
+			var listeners = this.getListenersAsObject(evt);
+			var index;
+			var key;
 	
-	        for (key in listeners) {
-	            if (listeners.hasOwnProperty(key)) {
-	                index = indexOfListener(listeners[key], listener);
+			for (key in listeners) {
+				if (listeners.hasOwnProperty(key)) {
+					index = indexOfListener(listeners[key], listener);
 	
-	                if (index !== -1) {
-	                    listeners[key].splice(index, 1);
-	                }
-	            }
-	        }
+					if (index !== -1) {
+						listeners[key].splice(index, 1);
+					}
+				}
+			}
 	
-	        return this;
-	    };
+			return this;
+		};
 	
-	    /**
-	     * Alias of removeListener
-	     */
-	    proto.off = alias('removeListener');
+		/**
+		 * Alias of removeListener
+		 */
+		proto.off = proto.removeListener;
 	
-	    /**
-	     * Adds listeners in bulk using the manipulateListeners method.
-	     * If you pass an object as the second argument you can add to multiple events at once. The object should contain key value pairs of events and listeners or listener arrays. You can also pass it an event name and an array of listeners to be added.
-	     * You can also pass it a regular expression to add the array of listeners to all events that match it.
-	     * Yeah, this function does quite a bit. That's probably a bad thing.
-	     *
-	     * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to add to multiple events at once.
-	     * @param {Function[]} [listeners] An optional array of listener functions to add.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.addListeners = function addListeners(evt, listeners) {
-	        // Pass through to manipulateListeners
-	        return this.manipulateListeners(false, evt, listeners);
-	    };
+		/**
+		 * Adds listeners in bulk using the manipulateListeners method.
+		 * If you pass an object as the second argument you can add to multiple events at once. The object should contain key value pairs of events and listeners or listener arrays. You can also pass it an event name and an array of listeners to be added.
+		 * You can also pass it a regular expression to add the array of listeners to all events that match it.
+		 * Yeah, this function does quite a bit. That's probably a bad thing.
+		 *
+		 * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to add to multiple events at once.
+		 * @param {Function[]} [listeners] An optional array of listener functions to add.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.addListeners = function addListeners(evt, listeners) {
+			// Pass through to manipulateListeners
+			return this.manipulateListeners(false, evt, listeners);
+		};
 	
-	    /**
-	     * Removes listeners in bulk using the manipulateListeners method.
-	     * If you pass an object as the second argument you can remove from multiple events at once. The object should contain key value pairs of events and listeners or listener arrays.
-	     * You can also pass it an event name and an array of listeners to be removed.
-	     * You can also pass it a regular expression to remove the listeners from all events that match it.
-	     *
-	     * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to remove from multiple events at once.
-	     * @param {Function[]} [listeners] An optional array of listener functions to remove.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.removeListeners = function removeListeners(evt, listeners) {
-	        // Pass through to manipulateListeners
-	        return this.manipulateListeners(true, evt, listeners);
-	    };
+		/**
+		 * Removes listeners in bulk using the manipulateListeners method.
+		 * If you pass an object as the second argument you can remove from multiple events at once. The object should contain key value pairs of events and listeners or listener arrays.
+		 * You can also pass it an event name and an array of listeners to be removed.
+		 * You can also pass it a regular expression to remove the listeners from all events that match it.
+		 *
+		 * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to remove from multiple events at once.
+		 * @param {Function[]} [listeners] An optional array of listener functions to remove.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.removeListeners = function removeListeners(evt, listeners) {
+			// Pass through to manipulateListeners
+			return this.manipulateListeners(true, evt, listeners);
+		};
 	
-	    /**
-	     * Edits listeners in bulk. The addListeners and removeListeners methods both use this to do their job. You should really use those instead, this is a little lower level.
-	     * The first argument will determine if the listeners are removed (true) or added (false).
-	     * If you pass an object as the second argument you can add/remove from multiple events at once. The object should contain key value pairs of events and listeners or listener arrays.
-	     * You can also pass it an event name and an array of listeners to be added/removed.
-	     * You can also pass it a regular expression to manipulate the listeners of all events that match it.
-	     *
-	     * @param {Boolean} remove True if you want to remove listeners, false if you want to add.
-	     * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to add/remove from multiple events at once.
-	     * @param {Function[]} [listeners] An optional array of listener functions to add/remove.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.manipulateListeners = function manipulateListeners(remove, evt, listeners) {
-	        var i;
-	        var value;
-	        var single = remove ? this.removeListener : this.addListener;
-	        var multiple = remove ? this.removeListeners : this.addListeners;
+		/**
+		 * Edits listeners in bulk. The addListeners and removeListeners methods both use this to do their job. You should really use those instead, this is a little lower level.
+		 * The first argument will determine if the listeners are removed (true) or added (false).
+		 * If you pass an object as the second argument you can add/remove from multiple events at once. The object should contain key value pairs of events and listeners or listener arrays.
+		 * You can also pass it an event name and an array of listeners to be added/removed.
+		 * You can also pass it a regular expression to manipulate the listeners of all events that match it.
+		 *
+		 * @param {Boolean} remove True if you want to remove listeners, false if you want to add.
+		 * @param {String|Object|RegExp} evt An event name if you will pass an array of listeners next. An object if you wish to add/remove from multiple events at once.
+		 * @param {Function[]} [listeners] An optional array of listener functions to add/remove.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.manipulateListeners = function manipulateListeners(remove, evt, listeners) {
+			var i;
+			var value;
+			var single = remove ? this.removeListener : this.addListener;
+			var multiple = remove ? this.removeListeners : this.addListeners;
 	
-	        // If evt is an object then pass each of its properties to this method
-	        if (typeof evt === 'object' && !(evt instanceof RegExp)) {
-	            for (i in evt) {
-	                if (evt.hasOwnProperty(i) && (value = evt[i])) {
-	                    // Pass the single listener straight through to the singular method
-	                    if (typeof value === 'function') {
-	                        single.call(this, i, value);
-	                    }
-	                    else {
-	                        // Otherwise pass back to the multiple function
-	                        multiple.call(this, i, value);
-	                    }
-	                }
-	            }
-	        }
-	        else {
-	            // So evt must be a string
-	            // And listeners must be an array of listeners
-	            // Loop over it and pass each one to the multiple method
-	            i = listeners.length;
-	            while (i--) {
-	                single.call(this, evt, listeners[i]);
-	            }
-	        }
+			// If evt is an object then pass each of it's properties to this method
+			if (typeof evt === 'object' && !(evt instanceof RegExp)) {
+				for (i in evt) {
+					if (evt.hasOwnProperty(i) && (value = evt[i])) {
+						// Pass the single listener straight through to the singular method
+						if (typeof value === 'function') {
+							single.call(this, i, value);
+						}
+						else {
+							// Otherwise pass back to the multiple function
+							multiple.call(this, i, value);
+						}
+					}
+				}
+			}
+			else {
+				// So evt must be a string
+				// And listeners must be an array of listeners
+				// Loop over it and pass each one to the multiple method
+				i = listeners.length;
+				while (i--) {
+					single.call(this, evt, listeners[i]);
+				}
+			}
 	
-	        return this;
-	    };
+			return this;
+		};
 	
-	    /**
-	     * Removes all listeners from a specified event.
-	     * If you do not specify an event then all listeners will be removed.
-	     * That means every event will be emptied.
-	     * You can also pass a regex to remove all events that match it.
-	     *
-	     * @param {String|RegExp} [evt] Optional name of the event to remove all listeners for. Will remove from every event if not passed.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.removeEvent = function removeEvent(evt) {
-	        var type = typeof evt;
-	        var events = this._getEvents();
-	        var key;
+		/**
+		 * Removes all listeners from a specified event.
+		 * If you do not specify an event then all listeners will be removed.
+		 * That means every event will be emptied.
+		 * You can also pass a regex to remove all events that match it.
+		 *
+		 * @param {String|RegExp} [evt] Optional name of the event to remove all listeners for. Will remove from every event if not passed.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.removeEvent = function removeEvent(evt) {
+			var type = typeof evt;
+			var events = this._getEvents();
+			var key;
 	
-	        // Remove different things depending on the state of evt
-	        if (type === 'string') {
-	            // Remove all listeners for the specified event
-	            delete events[evt];
-	        }
-	        else if (evt instanceof RegExp) {
-	            // Remove all events matching the regex.
-	            for (key in events) {
-	                if (events.hasOwnProperty(key) && evt.test(key)) {
-	                    delete events[key];
-	                }
-	            }
-	        }
-	        else {
-	            // Remove all listeners in all events
-	            delete this._events;
-	        }
+			// Remove different things depending on the state of evt
+			if (type === 'string') {
+				// Remove all listeners for the specified event
+				delete events[evt];
+			}
+			else if (type === 'object') {
+				// Remove all events matching the regex.
+				for (key in events) {
+					if (events.hasOwnProperty(key) && evt.test(key)) {
+						delete events[key];
+					}
+				}
+			}
+			else {
+				// Remove all listeners in all events
+				delete this._events;
+			}
 	
-	        return this;
-	    };
+			return this;
+		};
 	
-	    /**
-	     * Alias of removeEvent.
-	     *
-	     * Added to mirror the node API.
-	     */
-	    proto.removeAllListeners = alias('removeEvent');
+		/**
+		 * Emits an event of your choice.
+		 * When emitted, every listener attached to that event will be executed.
+		 * If you pass the optional argument array then those arguments will be passed to every listener upon execution.
+		 * Because it uses `apply`, your array of arguments will be passed as if you wrote them out separately.
+		 * So they will not arrive within the array on the other side, they will be separate.
+		 * You can also pass a regular expression to emit to all events that match it.
+		 *
+		 * @param {String|RegExp} evt Name of the event to emit and execute listeners for.
+		 * @param {Array} [args] Optional array of arguments to be passed to each listener.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.emitEvent = function emitEvent(evt, args) {
+			var listeners = this.getListenersAsObject(evt);
+			var listener;
+			var i;
+			var key;
+			var response;
 	
-	    /**
-	     * Emits an event of your choice.
-	     * When emitted, every listener attached to that event will be executed.
-	     * If you pass the optional argument array then those arguments will be passed to every listener upon execution.
-	     * Because it uses `apply`, your array of arguments will be passed as if you wrote them out separately.
-	     * So they will not arrive within the array on the other side, they will be separate.
-	     * You can also pass a regular expression to emit to all events that match it.
-	     *
-	     * @param {String|RegExp} evt Name of the event to emit and execute listeners for.
-	     * @param {Array} [args] Optional array of arguments to be passed to each listener.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.emitEvent = function emitEvent(evt, args) {
-	        var listenersMap = this.getListenersAsObject(evt);
-	        var listeners;
-	        var listener;
-	        var i;
-	        var key;
-	        var response;
+			for (key in listeners) {
+				if (listeners.hasOwnProperty(key)) {
+					i = listeners[key].length;
 	
-	        for (key in listenersMap) {
-	            if (listenersMap.hasOwnProperty(key)) {
-	                listeners = listenersMap[key].slice(0);
-	                i = listeners.length;
+					while (i--) {
+						// If the listener returns true then it shall be removed from the event
+						// The function is executed either with a basic call or an apply if there is an args array
+						listener = listeners[key][i];
+						response = listener.listener.apply(this, args || []);
+						if (response === this._getOnceReturnValue() || listener.once === true) {
+							this.removeListener(evt, listeners[key][i].listener);
+						}
+					}
+				}
+			}
 	
-	                while (i--) {
-	                    // If the listener returns true then it shall be removed from the event
-	                    // The function is executed either with a basic call or an apply if there is an args array
-	                    listener = listeners[i];
+			return this;
+		};
 	
-	                    if (listener.once === true) {
-	                        this.removeListener(evt, listener.listener);
-	                    }
+		/**
+		 * Alias of emitEvent
+		 */
+		proto.trigger = proto.emitEvent;
 	
-	                    response = listener.listener.apply(this, args || []);
+		/**
+		 * Subtly different from emitEvent in that it will pass its arguments on to the listeners, as opposed to taking a single array of arguments to pass on.
+		 * As with emitEvent, you can pass a regex in place of the event name to emit to all events that match it.
+		 *
+		 * @param {String|RegExp} evt Name of the event to emit and execute listeners for.
+		 * @param {...*} Optional additional arguments to be passed to each listener.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.emit = function emit(evt) {
+			var args = Array.prototype.slice.call(arguments, 1);
+			return this.emitEvent(evt, args);
+		};
 	
-	                    if (response === this._getOnceReturnValue()) {
-	                        this.removeListener(evt, listener.listener);
-	                    }
-	                }
-	            }
-	        }
+		/**
+		 * Sets the current value to check against when executing listeners. If a
+		 * listeners return value matches the one set here then it will be removed
+		 * after execution. This value defaults to true.
+		 *
+		 * @param {*} value The new value to check for when executing listeners.
+		 * @return {Object} Current instance of EventEmitter for chaining.
+		 */
+		proto.setOnceReturnValue = function setOnceReturnValue(value) {
+			this._onceReturnValue = value;
+			return this;
+		};
 	
-	        return this;
-	    };
+		/**
+		 * Fetches the current value to check against when executing listeners. If
+		 * the listeners return value matches this one then it should be removed
+		 * automatically. It will return true by default.
+		 *
+		 * @return {*|Boolean} The current value to check for or the default, true.
+		 * @api private
+		 */
+		proto._getOnceReturnValue = function _getOnceReturnValue() {
+			if (this.hasOwnProperty('_onceReturnValue')) {
+				return this._onceReturnValue;
+			}
+			else {
+				return true;
+			}
+		};
 	
-	    /**
-	     * Alias of emitEvent
-	     */
-	    proto.trigger = alias('emitEvent');
+		/**
+		 * Fetches the events object and creates one if required.
+		 *
+		 * @return {Object} The events storage object.
+		 * @api private
+		 */
+		proto._getEvents = function _getEvents() {
+			return this._events || (this._events = {});
+		};
 	
-	    /**
-	     * Subtly different from emitEvent in that it will pass its arguments on to the listeners, as opposed to taking a single array of arguments to pass on.
-	     * As with emitEvent, you can pass a regex in place of the event name to emit to all events that match it.
-	     *
-	     * @param {String|RegExp} evt Name of the event to emit and execute listeners for.
-	     * @param {...*} Optional additional arguments to be passed to each listener.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.emit = function emit(evt) {
-	        var args = Array.prototype.slice.call(arguments, 1);
-	        return this.emitEvent(evt, args);
-	    };
-	
-	    /**
-	     * Sets the current value to check against when executing listeners. If a
-	     * listeners return value matches the one set here then it will be removed
-	     * after execution. This value defaults to true.
-	     *
-	     * @param {*} value The new value to check for when executing listeners.
-	     * @return {Object} Current instance of EventEmitter for chaining.
-	     */
-	    proto.setOnceReturnValue = function setOnceReturnValue(value) {
-	        this._onceReturnValue = value;
-	        return this;
-	    };
-	
-	    /**
-	     * Fetches the current value to check against when executing listeners. If
-	     * the listeners return value matches this one then it should be removed
-	     * automatically. It will return true by default.
-	     *
-	     * @return {*|Boolean} The current value to check for or the default, true.
-	     * @api private
-	     */
-	    proto._getOnceReturnValue = function _getOnceReturnValue() {
-	        if (this.hasOwnProperty('_onceReturnValue')) {
-	            return this._onceReturnValue;
-	        }
-	        else {
-	            return true;
-	        }
-	    };
-	
-	    /**
-	     * Fetches the events object and creates one if required.
-	     *
-	     * @return {Object} The events storage object.
-	     * @api private
-	     */
-	    proto._getEvents = function _getEvents() {
-	        return this._events || (this._events = {});
-	    };
-	
-	    /**
-	     * Reverts the global {@link EventEmitter} to its previous value and returns a reference to this version.
-	     *
-	     * @return {Function} Non conflicting EventEmitter class.
-	     */
-	    EventEmitter.noConflict = function noConflict() {
-	        exports.EventEmitter = originalGlobalValue;
-	        return EventEmitter;
-	    };
-	
-	    // Expose the class either via AMD, CommonJS or the global object
-	    if (true) {
-	        !(__WEBPACK_AMD_DEFINE_RESULT__ = function () {
-	            return EventEmitter;
-	        }.call(exports, __webpack_require__, exports, module), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-	    }
-	    else if (typeof module === 'object' && module.exports){
-	        module.exports = EventEmitter;
-	    }
-	    else {
-	        exports.EventEmitter = EventEmitter;
-	    }
+		// Expose the class either via AMD, CommonJS or the global object
+		if (true) {
+			!(__WEBPACK_AMD_DEFINE_RESULT__ = function () {
+				return EventEmitter;
+			}.call(exports, __webpack_require__, exports, module), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+		}
+		else if (typeof module !== 'undefined' && module.exports){
+			module.exports = EventEmitter;
+		}
+		else {
+			this.EventEmitter = EventEmitter;
+		}
 	}.call(this));
 
 
 /***/ },
-/* 107 */
+/* 124 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var ComponentMenu = __webpack_require__(108);
+	var ComponentMenu = __webpack_require__(125);
 	var paper = prototypo;
+	var segment = __webpack_require__(126);
 	
 	function displayComponents( glyph, showNodes ) {
 		glyph.components.forEach(function(component) {
@@ -4230,26 +5001,97 @@ return /******/ (function(modules) { // webpackBootstrap
 				contour.fullySelected = showNodes && !contour.skeleton;
 			});
 	
-			if (component.choice && Array.isArray(component.choice)) {
-				component.onMouseEnter = function() {
-					component.oldFillColor = component.fillColor;
-					component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
-				};
+			var componentColor = this.fill ? '#333333' : undefined;
+			var componentHoverColor = '#24d390';
 	
-				component.onMouseLeave = function() {
-					component.fillColor = component.oldFillColor;
-				};
+			if (component.multiple) {
+				if (component.name.indexOf('none') !== -1 && component.anchors[0].anchor) {
+					if (!component.optionPoint) {
+						var point = new paper.Shape.Circle({
+							center: component.anchors[0].anchor,
+							radius: 10 / this.view.zoom,
+							strokeWidth: 2 / this.view.zoom,
+							fillColor: new paper.Color(0.5, 1, 1, 0.01),
+							strokeColor: new paper.Color(0.5, 0.5, 0.5),
+						});
 	
-				component.onClick = function(event) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.displayComponentList(glyph, component.componentId, event.point);
+						var oldDraw = point.draw;
+						point.draw = function() {
+							point.radius = 10 / this.view.zoom;
+							point.strokeWidth = 2 / this.view.zoom,
+							oldDraw.apply(point, arguments);
+						}.bind(this);
 	
-					this.view.onClick = function(event) {
-						glyph.componentMenu.removeMenu();
-						this.view.onClick = undefined;
+						point.onMouseEnter = function() {
+							if (this._showComponents) {
+								point.strokeColor = componentHoverColor;
+							}
+						}.bind(this);
+	
+						point.onMouseLeave = function() {
+							if (this._showComponents) {
+								point.strokeColor = new paper.Color(0.5, 0.5, 0.5);
+							}
+						}.bind(this);
+	
+						point.onClick = function(event) {
+							if (this._showComponents) {
+								event.preventDefault();
+								event.stopPropagation();
+								this.displayComponentList(glyph, component.componentId, event.point);
+	
+								this.view.onClick = function(event) {
+									glyph.componentMenu.removeMenu();
+									this.view.onClick = undefined;
+								}.bind(this);
+							}
+						}.bind(this);
+	
+						component.optionPoint = point;
+					}
+					else {
+						if (!this._showComponents) {
+							component.optionPoint.strokeColor = undefined;
+						}
+						else {
+							component.optionPoint.strokeColor = new paper.Color(0.5, 0.5, 0.5);
+						}
+					}
+				}
+				else {
+					if (this._showComponents) {
+						component.fillColor = new paper.Color(0.5, 0.5, 0.5);
+					}
+					else {
+						component.fillColor = componentColor;
+					}
+	
+					component.onMouseEnter = function() {
+						if (this._showComponents) {
+							component.oldFillColor = component.fillColor;
+							component.fillColor = new paper.Color(0.141176,0.827451,0.56470588);
+						}
 					}.bind(this);
-				}.bind(this);
+	
+					component.onMouseLeave = function() {
+						if (this._showComponents) {
+							component.fillColor = component.oldFillColor;
+						}
+					}.bind(this);
+	
+					component.onClick = function(event) {
+						if (this._showComponents) {
+							event.preventDefault();
+							event.stopPropagation();
+							this.displayComponentList(glyph, component.componentId, event.point);
+	
+							this.view.onClick = function(event) {
+								glyph.componentMenu.removeMenu();
+								this.view.onClick = undefined;
+							}.bind(this);
+						}
+					}.bind(this);
+				}
 			}
 	
 			if ( component.components.length ) {
@@ -4275,6 +5117,11 @@ return /******/ (function(modules) { // webpackBootstrap
 			this.currGlyph.visible = false;
 			this.currGlyph.components.forEach(function(component) {
 				component.visible = false;
+	
+				if (component.optionPoint) {
+					component.optionPoint.remove();
+					component.optionPoint = undefined;
+				}
 			}, this);
 			this.currGlyph.contours.forEach(({segments}) => {
 				segments.forEach(({directionHandle}) => {
@@ -4289,6 +5136,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// make sure the glyph is up-to-update
 		if ( _glyph && this.latestValues ) {
+			prototypo.Utils.updateParameters( this.font, this.latestValues );
 			this.currGlyph.update( this.latestValues );
 		}
 	
@@ -4304,7 +5152,9 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	
 		this.currGlyph.contours.forEach(function(contour) {
-			contour.fullySelected = this._showNodes;
+			if (contour.skeleton) {
+				contour.fullySelected = this._showNodes;
+			}
 		}, this);
 	
 		if ( this.currGlyph.components.length ) {
@@ -4328,54 +5178,19 @@ return /******/ (function(modules) { // webpackBootstrap
 		viewCoords = new Float32Array(6);
 	
 	function drawHandles(ctx, segments, matrix, settings, zoom) {
+	
+		for (var i = 0, l = segments.length; i < l; i++) {
+			if (segments[i].selected) {
+				segment.drawSegment(ctx, matrix, segments[i], settings, zoom);
+			}
+		}
+	}
+	
+	function drawSkeletonNode(ctx, segments, matrix, settings, zoom) {
 		var size = settings.handleSize,
 			half = size / 2,
 			pX,
 			pY;
-	
-		function drawHandle(j) {
-			var hX = Math.round( viewCoords[j] ),
-				hY = Math.round( viewCoords[j + 1] ),
-				text;
-	
-			if ( viewCoords[0] !== viewCoords[j] ||
-					viewCoords[1] !== viewCoords[j + 1]) {
-	
-				ctx.beginPath();
-				ctx.strokeStyle = settings.handleColor;
-				ctx.fillStyle = settings.handleColor;
-				ctx.moveTo(pX, pY);
-				ctx.lineTo(hX, hY);
-				ctx.stroke();
-				ctx.beginPath();
-				ctx.arc(hX, hY, half, 0, Math.PI * 2, true);
-				ctx.fill();
-	
-				if ( settings.drawCoords ) {
-					text = Math.round( worldCoords[j] ) + ',' +
-						Math.round( worldCoords[j + 1] );
-	
-					// use alpha to reduce the clutter caused by all this text when
-					// zooming out
-					if ( zoom < 1.7 ) {
-						ctx.globalAlpha = 0.2;
-					} else if ( zoom < 3 ) {
-						ctx.globalAlpha = 0.4;
-					}
-					ctx.fillText(
-						text,
-						hX - half - 3 - ctx.measureText(text).width,
-						// The text is slightly above the marker. This avoids
-						// overlapping when the handle vector is horizontal, which
-						// is quite a frequent case.
-						hY - 2
-					);
-					if ( zoom < 3 ) {
-						ctx.globalAlpha = 1;
-					}
-				}
-			}
-		}
 	
 		for (var i = 0, l = segments.length; i < l; i++) {
 			var segment = segments[i];
@@ -4384,21 +5199,11 @@ return /******/ (function(modules) { // webpackBootstrap
 			var state = segment._selection;
 			pX = Math.round( viewCoords[0] );
 			pY = Math.round( viewCoords[1] );
-			if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
-				drawHandle(2);
-			}
-			if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
-				drawHandle(4);
-			}
 			if (segment.expand) {
 				ctx.strokeStyle = settings.nodeColor;
 				ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 			}
-			else if (!segment.expandedTo){
-				// Draw a rectangle at segment.point:
-				ctx.fillStyle = settings.nodeColor;
-				ctx.fillRect( pX - half, pY - half, size, size );
-			}
+	
 			ctx.font = settings.handleFont;
 	
 			if ( settings.drawCoords ) {
@@ -4415,10 +5220,14 @@ return /******/ (function(modules) { // webpackBootstrap
 					ctx.globalAlpha = 1;
 				}
 			}
+	
+			if (segment.selected) {
+				drawSkeleton(ctx, segment, matrix, settings, zoom);
+			}
 		}
 	}
 	
-	function drawSkeletons(ctx, segments, matrix, settings, zoom) {
+	function drawSkeleton(ctx, segment, matrix, settings, zoom) {
 		function drawBones(start, end, width) {
 			var sX = Math.round( start[0] ),
 				sY = Math.round( start[1] ),
@@ -4432,53 +5241,51 @@ return /******/ (function(modules) { // webpackBootstrap
 			ctx.stroke();
 		}
 	
-		for (var i = 0, l = segments.length; i < l; i++) {
-			var segment = segments[i];
-			var state = segment._selection;
-			var boneStartCoords = new Float32Array(6);
-			segment._transformCoordinates(matrix, boneStartCoords, false);
+		var state = segment._selection;
+		var boneStartCoords = new Float32Array(6);
+		segment._transformCoordinates(matrix, boneStartCoords, false);
 	
-			if (segment.expand && segment.expandedTo && segment.expandedTo.length > 0) {
-				var firstRib = segment.expandedTo[0];
-				var secondRib = segment.expandedTo[1];
-				var ribFirstCoords = new Float32Array(6);
-				var ribSecondCoords = new Float32Array(6);
-				firstRib._transformCoordinates(matrix, ribFirstCoords, false);
-				secondRib._transformCoordinates(matrix, ribSecondCoords, false);
-				drawBones(boneStartCoords, ribFirstCoords, 1);
-				drawBones(boneStartCoords, ribSecondCoords, 1);
-			} else {
-				var firstRib = segment.expandedTo[0];
-				var secondRib = segment.expandedTo[1];
-				var ribFirstCoords = new Float32Array(6);
-				var ribSecondCoords = new Float32Array(6);
-				firstRib._transformCoordinates(matrix, ribFirstCoords, false);
-				secondRib._transformCoordinates(matrix, ribSecondCoords, false);
-				drawBones(ribFirstCoords, ribSecondCoords, 1);
-			}
+		if (segment.expand && segment.expandedTo && segment.expandedTo.length > 0) {
+			var firstRib = segment.expandedTo[0];
+			var secondRib = segment.expandedTo[1];
+			var ribFirstCoords = new Float32Array(6);
+			var ribSecondCoords = new Float32Array(6);
+			firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+			drawBones(boneStartCoords, ribFirstCoords, 1);
+			drawBones(boneStartCoords, ribSecondCoords, 1);
+		} else {
+			var firstRib = segment.expandedTo[0];
+			var secondRib = segment.expandedTo[1];
+			var ribFirstCoords = new Float32Array(6);
+			var ribSecondCoords = new Float32Array(6);
+			firstRib._transformCoordinates(matrix, ribFirstCoords, false);
+			secondRib._transformCoordinates(matrix, ribSecondCoords, false);
+			drawBones(ribFirstCoords, ribSecondCoords, 1);
 		}
 		ctx.lineWidth = 1;
 	}
 	
 	function _drawSelected( ctx, matrix ) {
-		ctx.beginPath();
-		// Now stroke it and draw its handles:
-		ctx.stroke();
-		drawHandles(
-			ctx,
-			this._segments,
-			matrix,
-			this._project._scope.settings,
-			this._project._view._zoom
-		);
-		if (this.skeleton) {
-			drawSkeletons(
+		if (this.fullySelected || (this.expandedFrom && this.expandedFrom.fullySelected)) {
+			ctx.beginPath();
+			// Now stroke it and draw its handles:
+			ctx.stroke();
+			drawHandles(
 				ctx,
 				this._segments,
 				matrix,
 				this._project._scope.settings,
 				this._project._view._zoom
 			);
+			if (this.skeleton) {
+				drawSkeletonNode(ctx,
+					this._segments,
+					matrix,
+					this._project._scope.settings,
+					this._project._view._zoom
+				)
+			}
 		}
 	}
 	
@@ -4486,7 +5293,7 @@ return /******/ (function(modules) { // webpackBootstrap
 		point.y = -point.y
 		var component = glyph.components.filter(function(element) { return element.componentId === componentId})[0];
 	
-		if (component.choice && component.choice.length > 1) {
+		if (component.multiple) {
 			if (glyph.componentMenu) {
 				glyph.componentMenu.removeMenu();
 			}
@@ -4517,7 +5324,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 108 */
+/* 125 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var prototypo = __webpack_require__(2),
@@ -4531,63 +5338,46 @@ return /******/ (function(modules) { // webpackBootstrap
 	var componentItemHeight = 40;
 	var componentItemMargin = 3;
 	var componentItemPadding = 12;
+	var componentListMargin = {
+		x: 12,
+		y: 5,
+	};
 	
 	function ComponentMenu( args ) {
 		paper.Group.prototype.constructor.apply( this );
 	
 		this.pivot = new paper.Point(0, 0);
-		this.matrix.d = -1;
 		this.position = new paper.Point(0,0);
 		this.componentList = args.components;
-		this.anchorPoint = args.point;
 		this.componentItems = [];
 		this.itemGroup = new paper.Group();
 		this.pointArg = args.point;
 		this.callback = args.callback;
 	
-		var circle = new paper.Shape.Circle(new paper.Point(0, 0), 16.4);
-		circle.fillColor = blackColor;
-		circle.matrix.ty = args.point.y;
-		circle.matrix.tx = args.point.x;
-		this.circle = circle;
-		this.addChild(circle);
+		var factorGen = new EaseInTimer(animationFrameLength);
 	
-		var icon = new paper.CompoundPath('M27.1,16.1l-1.6-0.2c0-1.1-0.3-2.1-0.7-3.1l1.3-1c0.1-0.1,0.1-0.2,0.2-0.3 c0-0.1,0-0.2-0.1-0.3l-1.8-2.4c-0.1-0.1-0.2-0.1-0.3-0.2c-0.1,0-0.2,0-0.3,0.1l-1.2,0.9c-0.8-0.7-1.7-1.3-2.8-1.8L20,6.3 c0-0.1,0-0.2-0.1-0.3c-0.1-0.1-0.2-0.1-0.3-0.2l-3-0.4c-0.1,0-0.2,0-0.3,0.1c-0.1,0.1-0.1,0.2-0.2,0.3l-0.2,1.5 c-1.1,0-2.2,0.3-3.2,0.7l-0.9-1.2c-0.1-0.2-0.4-0.2-0.6-0.1L8.8,8.5C8.7,8.6,8.6,8.7,8.6,8.8c0,0.1,0,0.2,0.1,0.3l0.9,1.2 C8.8,11.1,8.2,12,7.8,13l-1.5-0.2c-0.1,0-0.2,0-0.3,0.1c-0.1,0.1-0.1,0.2-0.2,0.3l-0.4,3c0,0.2,0.1,0.4,0.3,0.5l1.5,0.2 C7.3,18,7.6,19.1,8,20.1l-1.3,1c-0.2,0.1-0.2,0.4-0.1,0.6L8.5,24c0.1,0.2,0.4,0.2,0.6,0.1l1.3-0.9c0.8,0.7,1.8,1.3,2.7,1.7 l-0.2,1.7c0,0.2,0.1,0.4,0.3,0.5l3,0.4c0,0,0,0,0.1,0c0.2,0,0.4-0.1,0.4-0.4l0.2-1.6c1.1-0.1,2.1-0.3,3.1-0.7l1,1.4 c0.1,0.2,0.4,0.2,0.6,0.1l2.4-1.8c0.1-0.1,0.1-0.2,0.2-0.3c0-0.1,0-0.2-0.1-0.3l-1-1.3c0.7-0.8,1.3-1.7,1.7-2.7l1.7,0.2 c0.2,0,0.4-0.1,0.5-0.3l0.4-3C27.4,16.4,27.3,16.2,27.1,16.1z M16.4,20.2c-2.1,0-3.8-1.7-3.8-3.8c0-2.1,1.7-3.8,3.8-3.8 s3.8,1.7,3.8,3.8C20.2,18.5,18.5,20.2,16.4,20.2z');
-		icon.fillColor = whiteColor;
-		icon.position = circle.position;
-		this.icon = icon;
-		this.addChild(icon);
+		if (this.displayComponentList()) {
+			this.onFrame = function() {
+				var frameFactor = factorGen.getNextFactor();
+				var angle = animationAngleRotation * frameFactor;
 	
-		this.onMouseEnter = function() {
-			this.circle.fillColor = greenColor;
-		}
-	
-		this.onMouseLeave = function() {
-			this.circle.fillColor = blackColor;
-		}
-	
-		this.onMouseDown = function(event) {
-			event.preventDefault();
-			event.stopPropagation();
-		}
-	
-		this.onClick = function(event) {
-			event.preventDefault();
-			event.stopPropagation();
-			var factorGen = new EaseInTimer(animationFrameLength);
-	
-			if (this.displayComponentList()) {
-				this.onFrame = function() {
-					var frameFactor = factorGen.getNextFactor();
-					var angle = animationAngleRotation * frameFactor;
-					this.icon.rotate(angle, this.circle.bounds.center);
-	
-					if (EaseInTimer.frameCount === animationFrameLength) {
-						this.onFrame = undefined;
-					}
+				if (EaseInTimer.frameCount === animationFrameLength) {
+					this.onFrame = undefined;
 				}
 			}
 		}
+	
+		var oldDraw = this.draw;
+		this.draw = function() {
+	
+			if (this.itemGroup.onFrame) {
+				this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.scaling.y, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
+			}
+			else {
+				this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
+			}
+			oldDraw.apply(this, arguments);
+		}.bind(this);
 	}
 	
 	ComponentMenu.prototype = Object.create(paper.Group.prototype);
@@ -4614,14 +5404,17 @@ return /******/ (function(modules) { // webpackBootstrap
 			}.bind(this));
 			this.componentItems = componentItems;
 		}
+	
 		this.itemGroup.applyMatrix = false;
-		this.itemGroup.setMatrix(new paper.Matrix(1, 0, 0, 0, this.pointArg.x - 12, this.pointArg.y + 22));
+		this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 0, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
+	
 		var factorGen = new EaseInTimer(animationFrameLength, 0);
+	
 		this.itemGroup.onFrame = function() {
 			var frameFactor = factorGen.getNextFactor();
-			this.itemGroup.setMatrix(new paper.Matrix(1, 0, 0, this.itemGroup.matrix.d + frameFactor, this.pointArg.x - 12, this.pointArg.y + 22));
+			this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, this.itemGroup.matrix.d + frameFactor / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 			if (this.itemGroup.scaling.y >= 1) {
-				this.itemGroup.setMatrix(new paper.Matrix(1, 0, 0, 1, this.pointArg.x - 12, this.pointArg.y + 22));
+				this.itemGroup.setMatrix(new paper.Matrix(1 / this.view.zoom, 0, 0, 1 / this.view.zoom, this.pointArg.x - componentListMargin.x / this.view.zoom, this.pointArg.y + componentListMargin.y / this.view.zoom));
 				this.itemGroup.onFrame = undefined;
 			}
 	
@@ -4633,25 +5426,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	ComponentMenu.prototype.removeMenu = function() {
 		this.remove();
 		this.itemGroup.remove();
-		this.icon.remove();
-		this.circle.remove();
 	}
 	
 	function ComponentMenuItem( args ) {
 		paper.Group.prototype.constructor.apply( this );
 		var bg = new paper.Shape.Rectangle(args.point, new paper.Size(200, componentItemHeight));
 		bg.fillColor = blackColor;
-		bg.onMouseEnter = function() {
+		this.onMouseEnter = function() {
 			bg.fillColor = greenColor;
 		}
-		bg.onMouseLeave = function() {
+		this.onMouseLeave = function() {
 			bg.fillColor = blackColor;
 		}
 		this.addChild(bg);
 	
 		var text = new paper.PointText(new paper.Point(componentItemPadding, componentItemPadding));
 		text.content = args.text;
-		text.fontSize = 20;
+		text.fontSize = 16;
 		text.fillColor = whiteColor;
 		text.matrix.d = -1;
 		var textContainer = new paper.Group({
@@ -4685,7 +5476,128 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 109 */
+/* 126 */
+/***/ function(module, exports) {
+
+	var SelectionState = {
+			HANDLE_IN: 1,
+			HANDLE_OUT: 2,
+			POINT: 4,
+			SEGMENT: 7 // HANDLE_IN | HANDLE_OUT | POINT
+		};
+	
+	function drawSelected(ctx, matrix) {
+		ctx.beginPath();
+		ctx.stroke();
+	
+		drawSegment(ctx,
+			matrix,
+			this,
+			this._project._scope.settings,
+			this._project._view._zoom);
+	}
+	
+	function drawSegment(ctx, matrix, segment, settings, zoom) {
+		var size = settings.handleSize,
+			half = size / 2,
+			pX,
+			pY;
+	
+		var worldCoords = new Float32Array(6),
+			viewCoords = new Float32Array(6);
+		segment._transformCoordinates(null, worldCoords, false);
+		segment._transformCoordinates(matrix, viewCoords, false);
+		var state = segment._selection;
+		pX = Math.round( viewCoords[0] );
+		pY = Math.round( viewCoords[1] );
+		if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
+			drawHandle(ctx, zoom, 2, viewCoords, settings, worldCoords, pX, pY);
+		}
+		if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
+			drawHandle(ctx, zoom, 4, viewCoords, settings, worldCoords, pX, pY);
+		}
+		if (segment.expand) {
+			ctx.strokeStyle = settings.nodeColor;
+			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
+		}
+		else if (!segment.expandedTo){
+			// Draw a rectangle at segment.point:
+			ctx.fillStyle = settings.nodeColor;
+			ctx.fillRect( pX - half, pY - half, size, size );
+		}
+		ctx.font = settings.handleFont;
+	
+		if ( settings.drawCoords ) {
+			if ( zoom < 1.7 ) {
+				ctx.globalAlpha = 0.4;
+			}
+			ctx.fillText(
+				Math.round( worldCoords[0] ) + ',' +
+				Math.round( worldCoords[1] ),
+				pX + half + 5,
+				pY - 2
+			);
+			if ( zoom < 1.7 ) {
+				ctx.globalAlpha = 1;
+			}
+		}
+	}
+	
+	function drawHandle(ctx, zoom, j, viewCoords, settings, worldCoords, pX, pY) {
+		var size = settings.handleSize,
+			half = size / 2,
+			hX = Math.round( viewCoords[j] ),
+			hY = Math.round( viewCoords[j + 1] ),
+			text;
+	
+		if ( viewCoords[0] !== viewCoords[j] ||
+				viewCoords[1] !== viewCoords[j + 1]) {
+	
+			ctx.beginPath();
+			ctx.strokeStyle = settings.handleColor;
+			ctx.fillStyle = settings.handleColor;
+			ctx.moveTo(pX, pY);
+			ctx.lineTo(hX, hY);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.arc(hX, hY, half, 0, Math.PI * 2, true);
+			ctx.fill();
+	
+			if ( settings.drawCoords ) {
+				text = Math.round( worldCoords[j] ) + ',' +
+					Math.round( worldCoords[j + 1] );
+	
+				// use alpha to reduce the clutter caused by all this text when
+				// zooming out
+				if ( zoom < 1.7 ) {
+					ctx.globalAlpha = 0.2;
+				} else if ( zoom < 3 ) {
+					ctx.globalAlpha = 0.4;
+				}
+				ctx.fillText(
+					text,
+					hX - half - 3 - ctx.measureText(text).width,
+					// The text is slightly above the marker. This avoids
+					// overlapping when the handle vector is horizontal, which
+					// is quite a frequent case.
+					hY - 2
+				);
+				if ( zoom < 3 ) {
+					ctx.globalAlpha = 1;
+				}
+			}
+		}
+	}
+	
+	module.exports = {
+		drawSegment: drawSegment,
+		drawHandle: drawHandle,
+		drawSelected: drawSelected,
+	}
+
+
+/***/ },
+/* 127 */
 /***/ function(module, exports, __webpack_require__) {
 
 	var paper = __webpack_require__(2).paper;
@@ -4760,12 +5672,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 110 */
+/* 128 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var shell = __webpack_require__(111);
+	var shell = __webpack_require__(129);
 	
 	var URL = typeof window !== 'undefined' && ( window.URL || window.webkitURL );
+	
+	var prototypoWorker;
 	
 	module.exports = function init( opts ) {
 		var constructor = this;
@@ -4788,24 +5702,29 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// create the worker
 		return new Promise(function( resolve ) {
-			var worker = opts.worker = new SharedWorker( opts.workerUrl),
-				handler = function initWorker() {
-					worker.port.removeEventListener('message', handler);
-					resolve();
+			if (prototypoWorker) {
+				opts.worker = prototypoWorker
+				resolve();
+			} else {
+				var worker = opts.worker = new SharedWorker( opts.workerUrl),
+					handler = function initWorker() {
+						worker.port.removeEventListener('message', handler);
+						resolve();
+					};
+				prototypoWorker = worker;
+	
+				worker.port.onmessage = handler;
+				worker.port.start();
+	
+				var data = {
+					exportPort: opts.export || false,
+					deps: Array.isArray( opts.workerDeps ) ?
+						opts.workerDeps :
+						[ opts.workerDeps ]
 				};
-			window.worker = worker;
 	
-			worker.port.onmessage = handler;
-			worker.port.start();
-	
-			var data = {
-				exportPort: opts.export || false,
-				deps: Array.isArray( opts.workerDeps ) ?
-					opts.workerDeps :
-					[ opts.workerDeps ]
-			};
-	
-			worker.port.postMessage( data );
+				worker.port.postMessage( data );
+			}
 		}).then(function() {
 			return new constructor( opts );
 		});
@@ -4813,7 +5732,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 111 */
+/* 129 */
 /***/ function(module, exports) {
 
 	/* WEBPACK VAR INJECTION */(function(global) {var ports = [],
@@ -4980,8 +5899,13 @@ return /******/ (function(modules) { // webpackBootstrap
 			currName = name;
 			if ( templateName in fontsMap ) {
 				font = fontsMap[templateName];
+				font.resetComponents();
 				translateSubset();
-				return null;
+	
+				return {
+					solvingOrders: null,
+					handler: 'font',
+				};
 			}
 	
 			var fontObj = JSON.parse( fontSource );
@@ -4996,7 +5920,10 @@ return /******/ (function(modules) { // webpackBootstrap
 				solvingOrders[key] = font.glyphMap[key].solvingOrder;
 			});
 	
-			return solvingOrders;
+			return {
+				solvingOrders: solvingOrders,
+				handler: 'font',
+			};
 		};
 	
 		handlers.update = function( eData ) {
@@ -5009,22 +5936,26 @@ return /******/ (function(modules) { // webpackBootstrap
 			return result;
 		};
 	
-		handlers.getGlyphProperty = function(eData) {
+		handlers.getGlyphsProperties = function(eData) {
 			var result = null;
 	
 			if (eData.data) {
-				var unicode = eData.data.unicode;
+				var names = font.subset.map(function(glyph) { return glyph.name });
 				var properties = eData.data.properties;
 				result = {};
 	
 				font.glyphs.forEach(function(glyph) {
-					if (glyph.unicode === unicode) {
-						if (typeof properties === 'string') {
-							result[properties] = glyph[properties];
+					if (names.indexOf(glyph.name) !== -1) {
+	
+						if (!result[glyph.unicode]) {
+							result[glyph.unicode] = {};
 						}
-						else if (Array.isArray(properties)) {
+	
+						if (typeof properties === 'string') {
+							result[glyph.unicode][properties] = glyph[properties];
+						} else if (Array.isArray(properties)) {
 							properties.forEach(function(property) {
-								result[property] = glyph[property];
+								result[glyph.unicode][property] = glyph[property];
 							});
 						}
 					}
@@ -5048,7 +5979,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 			var altGlyph = font.glyphMap[params.glyphName];
 	
-			altGlyph.update( currValues );
+			font.subset.forEach(function( glyph ) {
+				if ((altGlyph.src.relatedGlyphs && altGlyph.src.relatedGlyphs.indexOf(glyph.name) !== -1) || glyph.name === altGlyph.name) {
+					glyph.update(currValues);
+				}
+			});
 			altGlyph.updateOTCommands();
 	
 			// Recreate the correct font.ot.glyphs.glyphs object, without
@@ -5225,19 +6160,25 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 	}
 	
-	onconnect = function(e) {
-		var port = e.ports[0];
-		prepareWorker(port);
+	if (self.worker && !self.worker.port) {
+		onconnect = function(e) {
+			var port = e.ports[0];
+			prepareWorker(port);
 	
-		port.start();
-	};
+			port.start();
+			port.onerror = function(e) {
+				throw new Error(e);
+			};
+		};
+	}
 	
 	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }())))
 
 /***/ },
-/* 112 */
-/***/ function(module, exports) {
+/* 130 */
+/***/ function(module, exports, __webpack_require__) {
 
+	var cloneDeep		= __webpack_require__(4);
 	// switch the current glyph with one that has the same name
 	// in the next font, or one with the same unicode, or .undef
 	function translateGlyph( self ) {
@@ -5259,7 +6200,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		// TODO: memoizing should have a limited size!
 		if ( name in this.fontsMap ) {
-			this.font = _.deepClone(this.fontsMap[name]);
+			this.font = this.fontsMap[name];
+			if (this.font.project !== this.project) {
+				this.font._setProject(this.project);
+				this.project.activeLayer.addChild(this.font);
+			}
+			this.font.resetComponents();
 			translateGlyph( this );
 			this.worker.port.postMessage({
 				type: 'font',
@@ -5291,9 +6237,9 @@ return /******/ (function(modules) { // webpackBootstrap
 						this.worker.port.removeEventListener('message', handler);
 	
 						// merge solvingOrders with the source
-						Object.keys( e.data ).forEach(function(key) {
+						Object.keys( e.data.solvingOrders ).forEach(function(key) {
 							if ( fontObj.glyphs[key] ) {
-								fontObj.glyphs[key].solvingOrder = e.data[key];
+								fontObj.glyphs[key].solvingOrder = e.data.solvingOrders[key];
 							}
 						});
 	
@@ -5319,13 +6265,14 @@ return /******/ (function(modules) { // webpackBootstrap
 
 
 /***/ },
-/* 113 */
+/* 131 */
 /***/ function(module, exports) {
 
 	function createUIEditor(paper, options) {
 		var UIEditor = {
 			onCursorsChanged: options.onCursorsChanged,
 			onConfirmChanges: options.onConfirmChanges,
+			onResetCursor: options.onResetCursor,
 		};
 	
 		var distributionHandle = new paper.Path.RegularPolygon({
@@ -5335,6 +6282,18 @@ return /******/ (function(modules) { // webpackBootstrap
 			fillColor: '#24d390',
 			transformContent: false,
 		});
+	
+		var resetHandle = new paper.Group({
+			children: [
+				new paper.Path('M0,12 a12,12 0 1,0 0,-1 z'),
+				new paper.Path('M9.47,7.894C9.458,7.893,9.449,7.896,9.439,7.896l0-0.766V6.353c0-0.044-0.007-0.087-0.018-0.128 C9.418,6.213,9.414,6.202,9.411,6.19C9.4,6.158,9.387,6.129,9.371,6.1C9.366,6.091,9.362,6.082,9.356,6.073 c-0.021-0.032-0.043-0.062-0.07-0.089C9.284,5.981,9.282,5.981,9.279,5.979C9.243,5.943,9.201,5.912,9.155,5.889 C8.98,5.8,8.771,5.815,8.613,5.931L4.646,9.41C4.511,9.509,4.431,9.665,4.431,9.832c0,0.167,0.081,0.322,0.215,0.421l3.968,3.479 c0.096,0.07,0.212,0.099,0.328,0.094h0c0.035-0.002,0.069-0.004,0.103-0.013c0.038-0.009,0.075-0.021,0.111-0.038 c0.175-0.089,0.284-0.269,0.284-0.464l0-1.6c3.214,0.212,5.544,1.585,5.544,3.271c0,0.998-0.808,1.951-2.214,2.614 c-0.145,0.068-0.21,0.238-0.149,0.386c0.048,0.115,0.159,0.185,0.277,0.185c0.033,0,0.067-0.006,0.101-0.018 c2.863-1.024,4.572-2.796,4.572-4.736C17.569,10.689,14.163,8.367,9.47,7.894z'),
+			],
+			transformContent: false,
+		});
+		resetHandle.children[0].fillColor = '#24d390';
+		resetHandle.children[0].transformContent = false;
+		resetHandle.children[1].fillColor = '#fefefe';
+		resetHandle.children[1].transformContent = false;
 	
 		distributionHandle.onMouseDrag = function(event) {
 			var expandVect = UIEditor.selection.expandedTo[0].point.subtract(UIEditor.selection.expandedTo[1].point);
@@ -5419,8 +6378,13 @@ return /******/ (function(modules) { // webpackBootstrap
 			UIEditor.onConfirmChanges();
 		}
 	
+		resetHandle.onClick = function() {
+			UIEditor.onResetCursor(UIEditor.selection.contourIdx, UIEditor.selection.nodeIdx);
+		}
+	
 		UIEditor.distributionHandle = distributionHandle;
 		UIEditor.directionHandle = directionHandle;
+		UIEditor.resetHandle = resetHandle;
 	
 		return UIEditor;
 	}
@@ -5428,9 +6392,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	function drawUIEditor(paper, hide, UIEditor) {
 		var directionHandle = UIEditor.directionHandle;
 		var distributionHandle = UIEditor.distributionHandle;
+		var resetHandle = UIEditor.resetHandle;
 	
 		directionHandle.visible = !hide && UIEditor.selection;
 		distributionHandle.visible = !hide && UIEditor.selection;
+		resetHandle.visible = !hide && UIEditor.selection;
 	
 		if(!UIEditor.selection) {
 			return;
@@ -5438,8 +6404,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	
 		directionHandle.bringToFront();
 		distributionHandle.bringToFront();
+		resetHandle.bringToFront();
 	
 		var orthVect = new paper.Point(-Math.sin(UIEditor.selection.expand.angle), Math.cos(UIEditor.selection.expand.angle));
+		var tangentVect = new paper.Point( orthVect.y, -orthVect.x);
 	
 		// we need to reset rotation and scaling before setting them, because PaperJS
 		// see https://github.com/paperjs/paper.js/issues/1177
@@ -5458,6 +6426,14 @@ return /******/ (function(modules) { // webpackBootstrap
 		directionHandle.position = UIEditor.selection.point.add(orthVect.multiply(75 * 0.5 / paper.view.zoom));
 		directionHandle.scaling = 1 * (0.5 / paper.view.zoom);
 		directionHandle.matrix = directionHandle.matrix.prepend(skewMatrix);
+	
+		resetHandle.children.forEach(function(child) {
+			child.rotation = 0;
+			child.scaling = 1;
+			child.position = UIEditor.selection.point.add(tangentVect.multiply(75 * 0.5 / paper.view.zoom));
+			child.scaling = 2 * (0.5 / paper.view.zoom);
+			child.matrix = child.matrix.prepend(skewMatrix);
+		});
 	}
 	
 	module.exports = {

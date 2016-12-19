@@ -423,7 +423,7 @@ function prepareWorker(self) {
 	}
 }
 
-if(self.worker && !self.worker.port) {
+if (self.worker && !self.worker.port) {
 	onconnect = function(e) {
 		var port = e.ports[0];
 		prepareWorker(port);

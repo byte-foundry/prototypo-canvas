@@ -61,6 +61,7 @@ function PrototypoCanvas( opts ) {
 	this.exportingZip = false;
 	this.allowMove = true;
 	this.isShiftPressed = false;
+	this.glyphPoints = [];
 	this.shiftLock = {
 		deltaX: 0,
 		deltaY: 0,
@@ -68,11 +69,17 @@ function PrototypoCanvas( opts ) {
 		direction: '',
 		isLineDrawn: false,
 	};
+	this.snapping = {
+		isSnapped: false,
+		axis: '',
+		deltaX: 0,
+		deltaY: 0,
+		snappedTo: undefined,
+	};
 
 	if (fontsMap) {
 		this.fontsMap = fontsMap;
-	}
-	else {
+	} else {
 		this.fontsMap = fontsMap = {};
 	}
 
@@ -82,7 +89,8 @@ function PrototypoCanvas( opts ) {
 		low: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		xHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
 		capHeight: new paper.Shape.Rectangle(new paper.Point(-50000, 0), new paper.Size(100000, 1)),
-		linearDraggingHelper: undefined,
+		shiftLockHelper: undefined,
+		snappingHelper: undefined,
 	};
 	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
 	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
@@ -201,8 +209,13 @@ function drawTypographicFrame() {
 	this.typographicFrame.low.size.height = 1 / this.zoom;
 	this.typographicFrame.xHeight.size.height = 1 / this.zoom;
 	this.typographicFrame.capHeight.size.height = 1 / this.zoom;
-	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.strokeWidth = 2 / this.zoom : null;
-	this.typographicFrame.linearDraggingHelper ? this.typographicFrame.linearDraggingHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ] : null;
+	if (this.typographicFrame.shiftLockHelper) {
+		this.typographicFrame.shiftLockHelper.strokeWidth = 2 / this.zoom;
+		this.typographicFrame.shiftLockHelper.dashArray = [ 8 / this.zoom, 8 / this.zoom ]
+	}
+	if (this.typographicFrame.snappingHelper) {
+		this.typographicFrame.snappingHelper.strokeWidth = 2 / this.zoom
+	}
 }
 
 PrototypoCanvas.prototype = Object.create( EventEmitter.prototype );
@@ -305,7 +318,16 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 			pCanvasInstance.shiftLock.deltaX = 0;
 			pCanvasInstance.shiftLock.deltaY = 0;
 			pCanvasInstance.shiftLock.direction = '';
-			pCanvasInstance.typographicFrame.linearDraggingHelper ? pCanvasInstance.typographicFrame.linearDraggingHelper.remove() : null;
+			pCanvasInstance.typographicFrame.shiftLockHelper ? pCanvasInstance.typographicFrame.shiftLockHelper.remove() : null;
+			if (pCanvasInstance.snapping.isLineDrawn) {
+				//Unsnap without moving the cursor and remove helpine when shift is released
+				pCanvasInstance.snapping.deltaX = 0;
+				pCanvasInstance.snapping.deltaY = 0;
+				pCanvasInstance.snapping.isSnapped = false;
+				pCanvasInstance.snapping.axis = '';
+				pCanvasInstance.snapping.snappedTo = undefined;
+				pCanvasInstance.typographicFrame.snappingHelper.remove();
+			}
 		}
 	}
 
@@ -361,6 +383,14 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 
 				UIEditor.selection = this.selectedSegment.expandedFrom ? this.selectedSegment.expandedFrom : this.selectedSegment;
 
+
+				skeletons.forEach((item) => {
+					item.segments.forEach((segment) => {
+						if (segment !== this.selectedSegment) {
+							pCanvasInstance.glyphPoints.push({ x: segment.point.x, y: segment.point.y });
+						}
+					});
+				});
 				return;
 			}
 		}
@@ -371,110 +401,143 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 	};
 
 	this.view.onMouseDrag = function(event) {
-		var contourIdx;
-		var nodeIdx;
-		var cursors;
+		var changes = {
+			type: '',
+			data: {
+				contourIdx: undefined,
+				nodeIdx: undefined
+			},
+			cursors: {}
+		}
+		let snappingTrigger = 10 / pCanvasInstance.zoom;
+		let unSnappingTrigger = 15 / pCanvasInstance.zoom;
+		let lockTrigger = 4 / pCanvasInstance.zoom;
+		let switchDirectionTrigger = 12 / pCanvasInstance.zoom;
+		let xDirection = (event.delta.x > 0) ? 'right' : 'left';
+		let yDirection = (event.delta.y < 0) ? 'top' : 'bottom';
 
 		if (this.selectedHandle && this.selectedSegment.expandedFrom && pCanvasInstance._showNodes) {
-			// change dir
-			var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
-			var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
-
-			var eventNormalized = event.delta.multiply(this.selectedHandleNorm / mouseVecNorm);
-			var newHandlePosition = new paper.Point(
-				this.selectedHandlePos.x + eventNormalized.x,
-				this.selectedHandlePos.y - eventNormalized.y
-			);
-
-			var normalizedHandle = newHandlePosition.normalize().multiply(this.selectedHandleNorm);
-			this.selectedHandlePos.x = normalizedHandle.x;
-			this.selectedHandlePos.y = normalizedHandle.y;
-			var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
-			this.selectedHandleAngle = normalizedHandle.angle;
-
-			var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
-			var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
-			//If point is smooth we take the dir that is not undefined else we take the dir
-			//we're modifying
-			var dirType = this.selectedSegment.expandedFrom.type === 'smooth'
-				? !this.selectedSegment.expandedFrom.dirIn
-					? 'dirOut'
-					: 'dirIn'
-				: (invertDir && !isDirIn) || (!invertDir && isDirIn)
-					? 'dirIn' :
-					'dirOut';
-
-			contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-			nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-			cursors = { [`contours.${contourIdx}.nodes.${nodeIdx}.${dirType}`]: successAngle };
-			this.changesToConfirm = cursors;
-			return emitEvent('manualchange', [ cursors ]);
+			changes.type = 'dir';
 		} else if (this.selectedSegment && pCanvasInstance._showNodes) {
+			changes.data.contourIdx = this.selectedSegment.contourIdx;
+			changes.data.nodeIdx = this.selectedSegment.nodeIdx;
 			if (this.selectedSegment.path.skeleton) {
 				// change skeleton x, y
-				contourIdx = this.selectedSegment.contourIdx;
-				nodeIdx = this.selectedSegment.nodeIdx;
+				changes.type = 'skeleton';
 
-				if (this.isShiftPressed) {
-
-					//drag locking mechanism
-					if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
-						pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
-						pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
-					} else {
-						pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
-						pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
-					}
-					let lockTrigger = 4;
-					let switchDirectionTrigger = 12;
-					if (!pCanvasInstance.shiftLock.isLocked) {
-						if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
-							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
-							pCanvasInstance.shiftLock.isLocked = true;
+				//Snapping mechanism
+				if (!pCanvasInstance.snapping.isSnapped) {
+					//Not yet snapped, scan all nodes to get a match
+					for (let glyphPoint of pCanvasInstance.glyphPoints) {
+						if (Math.abs(this.selectedSegment.point.x - glyphPoint.x) < snappingTrigger) {
+							changes.type = 'skeletonGotSnapped';
+							pCanvasInstance.snapping.isSnapped = true;
+							pCanvasInstance.snapping.axis = 'x';
+							pCanvasInstance.snapping.snappedTo = glyphPoint;
+							break;
 						}
-					} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
-							pCanvasInstance.typographicFrame.linearDraggingHelper.remove();
-							pCanvasInstance.shiftLock.isLineDrawn = false;
-							pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
-					}
-
-					// only use the delta according to the direction set
-					cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
-					{
-						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: 0,
-						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-					} :
-					{
-						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: 0,
-					};
-					if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
-						pCanvasInstance.shiftLock.isLineDrawn = true;
-						// draw helpline
-						pCanvasInstance.typographicFrame.linearDraggingHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
-						new paper.Path.Line(
-							new paper.Point( this.selectedSegment.point.x - 1 , 50000 ),
-							new paper.Point( this.selectedSegment.point.x - 1, -50000 )
-						) :
-						new paper.Path.Line(
-							new paper.Point( -100000, this.selectedSegment.point.y ),
-							new paper.Point( 100000, this.selectedSegment.point.y )
-						);
-						pCanvasInstance.typographicFrame.linearDraggingHelper.strokeColor = '#00c4d6';
-						pCanvasInstance.typographicFrame.linearDraggingHelper.opacity = 0.5;
-						pCanvasInstance.typographicFrame.linearDraggingHelper.applyMatrix = false;
+						if (Math.abs(this.selectedSegment.point.y - glyphPoint.y) < snappingTrigger) {
+							changes.type = 'skeletonGotSnapped';
+							pCanvasInstance.snapping.isSnapped = true;
+							pCanvasInstance.snapping.axis = 'y';
+							pCanvasInstance.snapping.snappedTo = glyphPoint;
+							break;
+						}
 					}
 				} else {
-					cursors = {
-						[`contours.${contourIdx}.nodes.${nodeIdx}.x`]: event.delta.x,
-						[`contours.${contourIdx}.nodes.${nodeIdx}.y`]: -event.delta.y,
-					};
+					//Snapped, engage the unsnapping loop
+					changes.type = 'skeletonSnapped';
+					pCanvasInstance.snapping.deltaX += event.delta.x;
+					pCanvasInstance.snapping.deltaY += event.delta.y;
+					if ( ( pCanvasInstance.snapping.axis === 'y' && Math.abs(pCanvasInstance.snapping.deltaY) > unSnappingTrigger )  ||
+						( pCanvasInstance.snapping.axis === 'x' && Math.abs(pCanvasInstance.snapping.deltaX) > unSnappingTrigger ) ) {
+						// Reached the trigger, unsnap it
+						changes.type = 'skeletonUnSnapped';
+					}
 				}
-				this.changesToConfirm = cursors;
-				return emitEvent('manualchange', [ cursors ]);
 			} else {
-				// change width
+				changes.type = 'width';
+			}
+		} else if (pCanvasInstance.prevPos) {
+			var currPos = new paper.Point(event.event.clientX, event.event.clientY),
+				delta = currPos.subtract(pCanvasInstance.prevPos);
 
+			pCanvasInstance.prevPos = currPos;
+
+			this.center = this.center.subtract(delta.divide(this.zoom * window.devicePixelRatio));
+			return;
+		}
+
+		if (this.isShiftPressed) {
+			//Handle shift lock
+			if (pCanvasInstance.shiftLock.deltaX > 8 || pCanvasInstance.shiftLock.deltaY > 8) {
+				pCanvasInstance.shiftLock.deltaX = Math.abs(event.delta.x);
+				pCanvasInstance.shiftLock.deltaY = Math.abs(event.delta.y);
+			} else {
+				pCanvasInstance.shiftLock.deltaX += Math.abs(event.delta.x);
+				pCanvasInstance.shiftLock.deltaY += Math.abs(event.delta.y);
+			}
+			if (!pCanvasInstance.shiftLock.isLocked) {
+				if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > lockTrigger) {
+					pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+					pCanvasInstance.shiftLock.isLocked = true;
+				}
+			} else if (Math.abs(pCanvasInstance.shiftLock.deltaX - pCanvasInstance.shiftLock.deltaY) > switchDirectionTrigger) {
+					pCanvasInstance.typographicFrame.shiftLockHelper ? pCanvasInstance.typographicFrame.shiftLockHelper.remove() : null;
+					pCanvasInstance.shiftLock.isLineDrawn = false;
+					pCanvasInstance.shiftLock.direction = pCanvasInstance.shiftLock.deltaX > pCanvasInstance.shiftLock.deltaY ? 'horizontal' : 'vertical';
+			}
+			if (!pCanvasInstance.shiftLock.isLineDrawn && pCanvasInstance.shiftLock.isLocked) {
+				// draw helpline
+				pCanvasInstance.typographicFrame.shiftLockHelper = pCanvasInstance.shiftLock.direction === 'vertical' ?
+				new paper.Path.Line(
+					new paper.Point( this.selectedSegment.point.x - 1 / pCanvasInstance.zoom , 50000 ),
+					new paper.Point( this.selectedSegment.point.x - 1 / pCanvasInstance.zoom, -50000 )
+				) :
+				new paper.Path.Line(
+					new paper.Point( -100000, this.selectedSegment.point.y ),
+					new paper.Point( 100000, this.selectedSegment.point.y )
+				);
+				pCanvasInstance.typographicFrame.shiftLockHelper.strokeColor = '#00c4d6';
+				pCanvasInstance.typographicFrame.shiftLockHelper.applyMatrix = false;
+				pCanvasInstance.shiftLock.isLineDrawn = true;
+			}
+		}
+
+		switch (changes.type) {
+			case 'dir':
+				var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
+				var mouseVecNorm = transformedEventPoint.subtract(this.skewedSelectedSegmentPoint).length;
+
+				var eventNormalized = event.delta.multiply(this.selectedHandleNorm / mouseVecNorm);
+				var newHandlePosition = new paper.Point(
+					this.selectedHandlePos.x + eventNormalized.x,
+					this.selectedHandlePos.y - eventNormalized.y
+				);
+
+				var normalizedHandle = newHandlePosition.normalize().multiply(this.selectedHandleNorm);
+				this.selectedHandlePos.x = normalizedHandle.x;
+				this.selectedHandlePos.y = normalizedHandle.y;
+				var successAngle = (normalizedHandle.angle - this.selectedHandleAngle) / 180 * Math.PI;
+				this.selectedHandleAngle = normalizedHandle.angle;
+
+				var invertDir = this.selectedSegment === this.selectedSegment.expandedFrom.expandedTo[1];
+				var isDirIn = this.selectedHandle === this.selectedSegment.handleIn;
+				//If point is smooth we take the dir that is not undefined else we take the dir
+				//we're modifying
+				var dirType = this.selectedSegment.expandedFrom.type === 'smooth' ?
+						!this.selectedSegment.expandedFrom.dirIn ?
+							'dirOut' :
+							'dirIn' :
+						(invertDir && !isDirIn) || (!invertDir && isDirIn) ?
+						'dirIn' :
+						'dirOut';
+
+				changes.data.contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+				changes.data.nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+				changes.cursors = { [`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.${dirType}`]: successAngle };
+				break;
+			case 'width':
 				if (this.selectedSegment.expandedFrom.skeletonBaseWidth === undefined) {
 					this.selectedSegment.expandedFrom.skeletonBaseWidth = this.selectedSegment.expandedFrom.expand.width;
 				}
@@ -496,24 +559,108 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 					deltaWidth /= (1 - distrib);
 				}
 
-				contourIdx = this.selectedSegment.expandedFrom.contourIdx;
-				nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
-				cursors = {
-					[`contours.${contourIdx}.nodes.${nodeIdx}.expand`]: { width: deltaWidth },
+				changes.data.contourIdx = this.selectedSegment.expandedFrom.contourIdx;
+				changes.data.nodeIdx = this.selectedSegment.expandedFrom.nodeIdx;
+				changes.cursors = {
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.expand`]: { width: deltaWidth },
 				};
-				this.changesToConfirm = cursors;
-				return emitEvent('manualchange', [ cursors ]);
-			}
-		} else if (pCanvasInstance.prevPos) {
-			var currPos = new paper.Point(event.event.clientX, event.event.clientY),
-				delta = currPos.subtract(pCanvasInstance.prevPos);
-
-			pCanvasInstance.prevPos = currPos;
-
-			this.center = this.center.subtract(delta.divide(this.zoom * window.devicePixelRatio));
-			return;
+				break;
+			case 'skeleton':
+				changes.cursors = {
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: event.delta.x,
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: -event.delta.y,
+				};
+				break;
+			case 'skeletonGotSnapped':
+				if (pCanvasInstance.snapping.axis === 'x') {
+					changes.cursors = {
+						[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: pCanvasInstance.snapping.snappedTo.x - this.selectedSegment.point.x,
+						[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: -event.delta.y,
+					};
+					pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+						new paper.Point( this.selectedSegment.point.x + pCanvasInstance.snapping.snappedTo.x - this.selectedSegment.point.x, this.selectedSegment.point.y - event.delta.y),
+						new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
+					);
+				} else {
+					changes.cursors = {
+						[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: event.delta.x,
+						[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y,
+					};
+					pCanvasInstance.typographicFrame.snappingHelper =	new paper.Path.Line(
+						new paper.Point( this.selectedSegment.point.x + event.delta.x, this.selectedSegment.point.y + pCanvasInstance.snapping.snappedTo.y - this.selectedSegment.point.y),
+						new paper.Point( pCanvasInstance.snapping.snappedTo.x, pCanvasInstance.snapping.snappedTo.y )
+					);
+				}
+				pCanvasInstance.typographicFrame.snappingHelper.strokeColor = '#FF4AFF';
+				pCanvasInstance.typographicFrame.snappingHelper.opacity = 0.5;
+				pCanvasInstance.typographicFrame.snappingHelper.applyMatrix = false;
+				pCanvasInstance.shiftLock.isLineDrawn = true;
+				break;
+			case 'skeletonSnapped':
+				if (pCanvasInstance.snapping.axis === 'y') {
+					pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.x =  !pCanvasInstance.shiftLock.isLocked ?
+					this.selectedSegment.point.x + event.delta.x :
+					this.selectedSegment.point.x;
+				}
+				if (pCanvasInstance.snapping.axis === 'x') {
+					pCanvasInstance.typographicFrame.snappingHelper.segments[0].point.y = !pCanvasInstance.shiftLock.isLocked ?
+					this.selectedSegment.point.y - event.delta.y :
+					this.selectedSegment.point.y;
+				}
+				changes.cursors = pCanvasInstance.snapping.axis === 'y' ?
+				{
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: event.delta.x,
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: 0,
+				} :
+				{
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: 0,
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: -event.delta.y,
+				};
+				break;
+			case 'skeletonUnSnapped':
+				changes.cursors = pCanvasInstance.snapping.axis === 'y' ?
+				{
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: event.delta.x,
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: yDirection === 'bottom' ?
+																									-unSnappingTrigger :
+																									unSnappingTrigger,
+				} :
+				{
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: xDirection === 'right' ?
+																									unSnappingTrigger :
+																									-unSnappingTrigger,
+					[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: -event.delta.y,
+				};
+				pCanvasInstance.snapping.deltaX = 0;
+				pCanvasInstance.snapping.deltaY = 0;
+				pCanvasInstance.snapping.isSnapped = false;
+				pCanvasInstance.snapping.axis = '';
+				pCanvasInstance.snapping.snappedTo = undefined;
+				pCanvasInstance.typographicFrame.snappingHelper.remove();
+				break;
+			default:
+				break;
 		}
 
+		let sendManualChanges = (cursors) => {
+			emitEvent('manualchange', [ cursors ]);
+		}
+
+		// Send computed changes
+		if (this.isShiftPressed) {
+			// only use the delta according to the direction set
+			changes.cursors = pCanvasInstance.shiftLock.direction === 'vertical' ?
+			{
+				[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: 0,
+				[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: -event.delta.y,
+			} :
+			{
+				[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.x`]: event.delta.x,
+				[`contours.${changes.data.contourIdx}.nodes.${changes.data.nodeIdx}.y`]: 0,
+			};
+		}
+		this.changesToConfirm = changes.cursors;
+		sendManualChanges(changes.cursors);
 		pCanvasInstance.prevPos = null;
 	};
 
@@ -525,6 +672,13 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 		pCanvasInstance.prevPos = undefined;
 		this.selectedHandle = null;
 		this.selectedSegment = null;
+		pCanvasInstance.glyphPoints = [];
+		pCanvasInstance.snapping.deltaX = 0;
+		pCanvasInstance.snapping.deltaY = 0;
+		pCanvasInstance.snapping.isSnapped = false;
+		pCanvasInstance.snapping.axis = '';
+		pCanvasInstance.snapping.snappedTo = undefined;
+		pCanvasInstance.typographicFrame.snappingHelper ? pCanvasInstance.typographicFrame.snappingHelper.remove() : null;
 	};
 }
 

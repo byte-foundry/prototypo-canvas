@@ -1,0 +1,81 @@
+{
+  "name": "prototypo-canvas",
+  "version": "1.15.1",
+  "description": "Prototypo canvas-rendering component",
+  "author": "Louis-Rémi <lrbabe@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/byte-foundry/prototypo-canvas/issues"
+  },
+  "homepage": "https://github.com/byte-foundry/prototypo-canvas",
+  "main": "src/prototypo-canvas.components.jsx",
+  "scripts": {
+    "gulp": "gulp",
+    "help": "gulp --tasks",
+    "test": "gulp build",
+    "//prepublish": "gulp build"
+  },
+  "browserify": {
+    "transform": [
+      "browserify-shim",
+      [
+        "babelify",
+        {
+          "only": "src/utils/dotsvg.tpl.js"
+        }
+      ]
+    ]
+  },
+  "browserify-shim": {
+    "prototypo.js": "global:prototypo"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:byte-foundry/prototypo-canvas.git"
+  },
+  "keywords": [
+    "canvas",
+    "paperjs",
+    "pluminjs",
+    "prototypojs"
+  ],
+  "dependencies": {
+    "es6-object-assign": "^1.0.1",
+    "jquery": "^2.2.1",
+    "jquery.wheel.js": "0.2.0",
+    "normalize.css": "^3.0.3",
+    "pepjs": "^0.4.1",
+    "prototypo.js": "~1.15.0",
+    "whatwg-fetch": "^0.11.0",
+    "deptree": "^0.1.0",
+    "wolfy87-eventemitter": "~4.2.0"
+  },
+  "devDependencies": {
+    "babel-core": "^6.9.0",
+    "babel-eslint": "^4.1.8",
+    "babel-loader": "^6.2.1",
+    "babel-plugin-syntax-async-functions": "^6.8.0",
+    "babel-plugin-transform-class-properties": "^6.9.0",
+    "babel-plugin-transform-object-rest-spread": "^6.8.0",
+    "babel-plugin-transform-regenerator": "^6.9.0",
+    "babel-polyfill": "^6.9.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-react": "^6.5.0",
+    "babel-project-relative-import": "^2.0.0",
+    "browser-sync": "^2.11.1",
+    "chai": "^3.5.0",
+    "elzevir.ptf": "byte-foundry/elzevir.ptf",
+    "envify": "^3.4.0",
+    "eslint": "^3.8.1",
+    "eslint-plugin-mocha": "^4.7.0",
+    "ghooks": "^1.0.3",
+    "gulp": "^3.9.1",
+    "gulp-shelter": "^1.0.1",
+    "john-fell.ptf": "byte-foundry/john-fell.ptf",
+    "mocha": "^2.4.5",
+    "mocha-phantomjs": "^4.0.2",
+    "test.ptf": "byte-foundry/test.ptf",
+    "venus.ptf": "byte-foundry/venus.ptf",
+    "webpack": "^1.12.14"
+  }
+}
