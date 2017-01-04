@@ -208,7 +208,7 @@ function drawSkeletonNode(ctx, segments, matrix, settings, zoom) {
 		pX = Math.round( viewCoords[0] );
 		pY = Math.round( viewCoords[1] );
 		if (segment.expand) {
-			ctx.strokeStyle = segment._isHovered ? '#F0FF0F' : settings.nodeColor;
+			ctx.strokeStyle = segment._isHovered ? '#f3e04a' : settings.nodeColor;
 			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 		}
 
