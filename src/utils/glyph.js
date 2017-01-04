@@ -131,9 +131,9 @@ function displayGlyph( _glyph ) {
 				component.optionPoint = undefined;
 			}
 		}, this);
-		this.currGlyph.contours.forEach(({segments}) => {
-			segments.forEach(({directionHandle}) => {
-				if(directionHandle) {
+		this.currGlyph.contours.forEach(({ segments }) => {
+			segments.forEach(({ directionHandle }) => {
+				if (directionHandle) {
 					directionHandle.visible = false;
 				}
 			})
@@ -208,7 +208,7 @@ function drawSkeletonNode(ctx, segments, matrix, settings, zoom) {
 		pX = Math.round( viewCoords[0] );
 		pY = Math.round( viewCoords[1] );
 		if (segment.expand) {
-			ctx.strokeStyle = settings.nodeColor;
+			ctx.strokeStyle = segment._isHovered ? '#F0FF0F' : settings.nodeColor;
 			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 		}
 

@@ -106,6 +106,38 @@ function PrototypoCanvas( opts ) {
 			e.stopPropagation();
 		}
 
+		if (pCanvasInstance._showNodes) {
+			// if visible, skeleton points can be matched
+			var skeletons = paper.project.getItems({ selected: true }).filter((item) => { return item.skeleton && !item.visible; });
+			skeletons.forEach((item) => { item.visible = true; });
+
+			var results = paper.project.hitTestAll(e.point, {
+				match(hit) {
+					return hit.item.skeleton || hit.segment.expandedFrom;
+				},
+				segments: true,
+				handles: true,
+				tolerance: (20 * Math.exp(-0.12 * this.zoom)).toFixed(1), //TODO: better exponential to have perfect tolerance with zoom
+			});
+			// matching skeleton first
+			var hitResult = results.filter((hit) => { return hit.item.expandedTo; })[0] || results[0];
+
+			skeletons.forEach((item) => {
+				item.visible = false;
+			});
+
+			if (hitResult) {
+				hitResult.segment._isHovered = true;
+				skeletons.forEach((item) => {
+					item.segments.forEach((segment) => {
+						if (segment !== hitResult.segment) {
+							segment._isHovered = false;
+						}
+					});
+				});
+			}
+		}
+
 		return false;
 	}
 
