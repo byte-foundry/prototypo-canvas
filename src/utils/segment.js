@@ -29,21 +29,24 @@ function drawSegment(ctx, matrix, segment, settings, zoom) {
 	var state = segment._selection;
 	pX = Math.round( viewCoords[0] );
 	pY = Math.round( viewCoords[1] );
-	let _settings = Object.assign({}, settings);
 	if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
-		if (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleIn') {
-			_settings.handleColor = '#f3e04a';
-		}
-		drawHandle(ctx, zoom, 2, viewCoords, _settings, worldCoords, pX, pY);
+		drawHandle(ctx, zoom, 2, viewCoords,
+			(segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleIn') ?
+			{...settings,
+			handleColor: '#f3e04a'} :
+			settings,
+			worldCoords, pX, pY);
 	}
 	if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
-		if (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleOut') {
-			_settings.handleColor = '#f3e04a';
-		}
-		drawHandle(ctx, zoom, 4, viewCoords, _settings, worldCoords, pX, pY);
+		drawHandle(ctx, zoom, 4, viewCoords,
+			(segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleOut') ?
+			{...settings,
+			handleColor: '#f3e04a'} :
+			settings,
+			worldCoords, pX, pY);
 	}
 	if (segment.expand) {
-		ctx.strokeStyle = (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'expanded') ? '#f3e04a' : settings.nodeColor;
+		ctx.strokeStyle = settings.nodeColor;
 		ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 	} else if (!segment.expandedTo) {
 		// Draw a rectangle at segment.point:
