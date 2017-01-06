@@ -186,7 +186,6 @@ var SelectionState = {
 	viewCoords = new Float32Array(6);
 
 function drawHandles(ctx, segments, matrix, settings, zoom) {
-
 	for (var i = 0, l = segments.length; i < l; i++) {
 		if (segments[i].selected) {
 			segment.drawSegment(ctx, matrix, segments[i], settings, zoom);
@@ -208,7 +207,7 @@ function drawSkeletonNode(ctx, segments, matrix, settings, zoom) {
 		pX = Math.round( viewCoords[0] );
 		pY = Math.round( viewCoords[1] );
 		if (segment.expand) {
-			ctx.strokeStyle = segment._isHovered ? '#f3e04a' : settings.nodeColor;
+			ctx.strokeStyle = (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'skeleton') ? '#f3e04a' : settings.nodeColor;
 			ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
 		}
 
@@ -242,7 +241,7 @@ function drawSkeleton(ctx, segment, matrix, settings, zoom) {
 			eX = Math.round( end[0] ),
 			eY = Math.round( end[1] );
 		ctx.beginPath();
-		ctx.strokeStyle = settings.skeletonColor;
+		ctx.strokeStyle = (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'expanded') ? '#f3e04a' : settings.skeletonColor;
 		ctx.lineWidth = width;
 		ctx.moveTo(sX, sY);
 		ctx.lineTo(eX, eY);

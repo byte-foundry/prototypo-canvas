@@ -29,19 +29,25 @@ function drawSegment(ctx, matrix, segment, settings, zoom) {
 	var state = segment._selection;
 	pX = Math.round( viewCoords[0] );
 	pY = Math.round( viewCoords[1] );
+	let _settings = Object.assign({}, settings);
 	if ( state & /*#=*/ SelectionState.HANDLE_IN ) {
-		drawHandle(ctx, zoom, 2, viewCoords, settings, worldCoords, pX, pY);
+		if (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleIn') {
+			_settings.handleColor = '#f3e04a';
+		}
+		drawHandle(ctx, zoom, 2, viewCoords, _settings, worldCoords, pX, pY);
 	}
 	if ( state & /*#=*/ SelectionState.HANDLE_OUT ) {
-		drawHandle(ctx, zoom, 4, viewCoords, settings, worldCoords, pX, pY);
+		if (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'handleOut') {
+			_settings.handleColor = '#f3e04a';
+		}
+		drawHandle(ctx, zoom, 4, viewCoords, _settings, worldCoords, pX, pY);
 	}
 	if (segment.expand) {
-		ctx.strokeStyle = settings.nodeColor;
+		ctx.strokeStyle = (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'expanded') ? '#f3e04a' : settings.nodeColor;
 		ctx.strokeRect( pX - (half + 1), pY - (half + 1), size + 1, size + 1 );
-	}
-	else if (!segment.expandedTo){
+	} else if (!segment.expandedTo) {
 		// Draw a rectangle at segment.point:
-		ctx.fillStyle = settings.nodeColor;
+		ctx.fillStyle = (segment._hovered && segment._hovered.isHovered && segment._hovered.type === 'expanded') ? '#f3e04a' : settings.nodeColor;
 		ctx.fillRect( pX - half, pY - half, size, size );
 	}
 	ctx.font = settings.handleFont;

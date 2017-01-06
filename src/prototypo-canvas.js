@@ -100,10 +100,10 @@ function PrototypoCanvas( opts ) {
 	this.typographicFrame.xHeight.fillColor = '#777777';
 	this.typographicFrame.capHeight.fillColor = '#777777';
 
-	this.view.onMouseMove = function(e) {
+	this.view.onMouseMove = function(event) {
 		if (!pCanvasInstance.allowMove) {
-			e.preventDefault();
-			e.stopPropagation();
+			event.preventDefault();
+			event.stopPropagation();
 		}
 
 		if (pCanvasInstance._showNodes) {
@@ -111,7 +111,7 @@ function PrototypoCanvas( opts ) {
 			var skeletons = paper.project.getItems({ selected: true }).filter((item) => { return item.skeleton && !item.visible; });
 			skeletons.forEach((item) => { item.visible = true; });
 
-			var results = paper.project.hitTestAll(e.point, {
+			var results = paper.project.hitTestAll(event.point, {
 				match(hit) {
 					return hit.item.skeleton || hit.segment.expandedFrom;
 				},
@@ -126,15 +126,29 @@ function PrototypoCanvas( opts ) {
 				item.visible = false;
 			});
 
-			if (hitResult) {
-				hitResult.segment._isHovered = true;
+			if (hitResult && hitResult.segment) {
+				let hitType = '';
 				skeletons.forEach((item) => {
 					item.segments.forEach((segment) => {
-						if (segment !== hitResult.segment) {
-							segment._isHovered = false;
-						}
+						segment._hovered = {
+							isHovered: false,
+							type: ''
+						};
 					});
 				});
+				if (hitResult.segment.path.skeleton) {
+					hitType = 'skeleton';
+				} else {
+					hitType = 'expanded'
+				}
+
+				if (hitResult.type.startsWith('handle')) {
+					hitType  = hitResult.type == 'handle-in' ? 'handleIn' : 'handleOut';
+				}
+				hitResult.segment._hovered = {
+					isHovered: true,
+					type: hitType
+				}
 			}
 		}
 
