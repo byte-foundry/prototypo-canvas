@@ -26,6 +26,7 @@ function createUIEditor(paper, options) {
 	resetHandle.children[1].transformContent = false;
 
 	distributionHandle.onMouseDrag = function(event) {
+		distributionHandle.fillColor = '#f3e04a';
 		var expandVect = UIEditor.selection.expandedTo[0].point.subtract(UIEditor.selection.expandedTo[1].point);
 		var direction = new paper.Point(
 			Math.cos(UIEditor.selection.expand.angle),
@@ -53,6 +54,7 @@ function createUIEditor(paper, options) {
 
 	distributionHandle.onMouseUp = function(event) {
 		UIEditor.onConfirmChanges();
+		distributionHandle.fillColor = '#24d390';
 	}
 
 	var directionHandle = new paper.Path.Arc({
@@ -75,6 +77,7 @@ function createUIEditor(paper, options) {
 	};
 
 	directionHandle.onMouseDrag = function(event) {
+		directionHandle.strokeColor = '#f3e04a';
 		var transformedEventPoint = new paper.Point(event.point.x, -event.point.y);
 		var skewedSelection = new paper.Point(
 			UIEditor.selection.x + UIEditor.selection.path.viewMatrix.c / paper.view.zoom  * UIEditor.selection.y,
@@ -106,10 +109,39 @@ function createUIEditor(paper, options) {
 
 	directionHandle.onMouseUp = function(event) {
 		UIEditor.onConfirmChanges();
+		directionHandle.strokeColor = '#24d390';
 	}
 
 	resetHandle.onClick = function() {
 		UIEditor.onResetCursor(UIEditor.selection.contourIdx, UIEditor.selection.nodeIdx);
+		resetHandle.children[0].fillColor = '#f3e04a';
+		setTimeout(function() {
+			resetHandle.children[0].fillColor = '#24d390';
+		}, 100);
+	}
+
+	directionHandle.onMouseEnter = function() {
+		directionHandle.strokeColor = '#f3e04a';
+	}
+
+	resetHandle.onMouseEnter = function() {
+		resetHandle.children[0].fillColor = '#f3e04a';
+	}
+
+	distributionHandle.onMouseEnter = function() {
+		distributionHandle.fillColor = '#f3e04a';
+	}
+
+	directionHandle.onMouseLeave = function() {
+		directionHandle.strokeColor = '#24d390';
+	}
+
+	resetHandle.onMouseLeave = function() {
+		resetHandle.children[0].fillColor = '#24d390';
+	}
+
+	distributionHandle.onMouseLeave = function() {
+		distributionHandle.fillColor = '#24d390';
 	}
 
 	UIEditor.remove = function() {
