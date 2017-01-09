@@ -19,7 +19,7 @@ module.exports = function loadFont( name, fontSource, db ) {
 	this.latestValues = this.latestRafValues = null;
 
 	// TODO: memoizing should have a limited size!
-	if ( name in this.fontsMap ) {
+		/*if ( name in this.fontsMap ) {
 		this.font = this.fontsMap[name];
 		if (this.font.project !== this.project) {
 			this.font._setProject(this.project);
@@ -33,7 +33,7 @@ module.exports = function loadFont( name, fontSource, db ) {
 			db: db
 		});
 		return Promise.resolve( this.font );
-	}
+	}*/
 
 	return ( fontSource.charAt(0) === '{' ?
 		Promise.resolve( fontSource ) :

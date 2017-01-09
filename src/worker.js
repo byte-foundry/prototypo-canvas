@@ -160,7 +160,7 @@ function runWorker(self) {
 
 		// TODO: this should be done using a memoizing table of limited size
 		currName = name;
-		if ( templateName in fontsMap ) {
+			/*if ( templateName in fontsMap ) {
 			font = fontsMap[templateName];
 			font.resetComponents();
 			translateSubset();
@@ -169,7 +169,7 @@ function runWorker(self) {
 				solvingOrders: null,
 				handler: 'font',
 			};
-		}
+		}*/
 
 		var fontObj = JSON.parse( fontSource );
 
