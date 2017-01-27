@@ -145,7 +145,10 @@ function displayGlyph( _glyph ) {
 	// make sure the glyph is up-to-update
 	if ( _glyph && this.latestValues ) {
 		prototypo.Utils.updateParameters( this.font, this.latestValues );
-		this.currGlyph.update( this.latestValues );
+		var glyphAlt = this.currGlyph.update( this.latestValues );
+		if (glyphAlt !== glyph) {
+			return this.displayGlyph(glyphAlt);
+		}
 	}
 
 	// .. and show it
