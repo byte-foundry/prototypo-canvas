@@ -277,7 +277,7 @@ PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
 PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
 PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
 
-PrototypoCanvas.prototype.stopRaf = function() {
+PrototypoCanvas.stopRaf = function() {
 	if (this.rafId) {
 		var cancelRaf = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
 		cancelRaf(this.rafId);

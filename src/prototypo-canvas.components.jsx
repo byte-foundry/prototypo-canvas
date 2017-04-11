@@ -18,7 +18,7 @@ export default class PrototypoCanvasContainer extends Component {
 
 	componentWillUnmount() {
 		canvasBackRef = this.refs.canvas;
-		this.state.instance.stopRaf();
+		PrototypoCanvas.stopRaf();
 	}
 
 	componentWillReceiveProps(nextProps) {
@@ -116,6 +116,7 @@ export default class PrototypoCanvasContainer extends Component {
 				}).then(async (instance) => {
 					instance.addOnceListener('worker.fontCreated', () => {
 						this.props.afterLoad()
+						this.reset();
 					});
 
 					await instance.loadFont(this.props.familyName, this.props.json, this.props.db);
@@ -169,10 +170,10 @@ export default class PrototypoCanvasContainer extends Component {
 						this.props.resetManualNode({contourId, nodeId, force, glyphName: instance.currGlyph.name});
 					});
 
+
 					return this.setState({
 						instance,
 					});
-
 				});
 			}
 		}
