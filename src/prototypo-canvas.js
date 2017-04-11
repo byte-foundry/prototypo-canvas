@@ -277,10 +277,10 @@ PrototypoCanvas.prototype.displayComponents = glyph.displayComponents;
 PrototypoCanvas.prototype.displayComponentList = glyph.displayComponentList;
 PrototypoCanvas.prototype.changeComponent = glyph.changeComponent;
 
-PrototypoCanvas.stopRaf = function() {
-	if (this.rafId) {
+PrototypoCanvas.stopRaf = function(instance) {
+	if (instance && instance.rafId) {
 		var cancelRaf = window.cancelAnimationFrame || window.mozCancelAnimationFrame;
-		cancelRaf(this.rafId);
+		cancelRaf(instance.rafId);
 	}
 };
 
