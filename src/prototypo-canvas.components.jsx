@@ -196,7 +196,7 @@ export default class PrototypoCanvasContainer extends Component {
 		);
 	}
 
-	componentDidUpdate() {
+	componentDidUpdate(prevProps, prevState) {
 		if (!this.alreadyRafed) {
 			const raf = window.requestAnimationFrame || window.webkitRequestAnimationFrame;
 			this.alreadyRafed = raf(() => {
@@ -220,6 +220,11 @@ export default class PrototypoCanvasContainer extends Component {
 				this.alreadyRafed = undefined;
 			});
 		}
+		if (this.props.uiMode !== prevProps.uiMode && this.props.uiMode.indexOf('glyph') !== -1) {
+			setTimeout(() => {
+				this.reset();
+			}, 10);
+		}
 	}
 
 	changeFontInstanceValues() {
@@ -238,7 +243,7 @@ export default class PrototypoCanvasContainer extends Component {
 		const oldSize = new prototypo.paper.Size(canvasWidth,
 			canvasHeight);
 
-		if (oldSize.width && oldSize.height) {
+		if (oldSize.width && oldSize.height && (width !== oldSize.width || height !== oldSize.height)) {
 			const centerClone = this.state.instance.view.center.clone();
 			const center = new prototypo.paper.Point(
 				centerClone.x,
@@ -258,7 +263,7 @@ export default class PrototypoCanvasContainer extends Component {
 				-newCenterPosNotTransformed.y
 			);
 			if (newCenterPos.x !== center.x || newCenterPos.y !== -center.y) {
-				this.props.resetView(newCenterPos.x, newCenterPos.y);
+				this.props.resetView(newCenterPos.x, newCenterPos.y, this.state.instance.zoom);
 			}
 		}
 
