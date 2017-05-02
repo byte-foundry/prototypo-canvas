@@ -190,10 +190,12 @@ export default class PrototypoCanvasContainer extends Component {
 	}
 
 	reset() {
-		this.props.resetView(
-			this.state.instance.currGlyph.bounds.center.x,
-			-this.state.instance.currGlyph.bounds.center.y,
-		);
+		if (this.state.instance && this.state.instance.currGlyph) {
+			this.props.resetView(
+				this.state.instance.currGlyph.bounds.center.x,
+				-this.state.instance.currGlyph.bounds.center.y,
+			);
+		}
 	}
 
 	componentDidUpdate(prevProps, prevState) {

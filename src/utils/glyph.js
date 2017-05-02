@@ -6,7 +6,7 @@ function displayComponents( glyph, showNodes ) {
 	glyph.components.forEach(function(component) {
 		component.visible = true;
 		component.contours.forEach(function(contour) {
-			contour.fullySelected = showNodes && !contour.skeleton;
+			contour.fullySelected = false;
 		});
 
 		var componentColor = this.fill ? '#333333' : undefined;
