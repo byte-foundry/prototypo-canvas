@@ -92,9 +92,9 @@ function PrototypoCanvas( opts ) {
 		shiftLockHelper: undefined,
 		snappingHelper: undefined,
 	};
-	this.typographicFrame.spacingLeft.fillColor = '#f5f5f5';
+	this.typographicFrame.spacingLeft.fillColor = 'rgba(235,235,235,0.5)';
 	this.typographicFrame.spacingLeft.strokeColor = '#24d390';
-	this.typographicFrame.spacingRight.fillColor = '#f5f5f5';
+	this.typographicFrame.spacingRight.fillColor = 'rgba(235,235,235,0.5)';
 	this.typographicFrame.spacingRight.strokeColor = '#24d390';
 	this.typographicFrame.low.fillColor = '#777777';
 	this.typographicFrame.xHeight.fillColor = '#777777';
