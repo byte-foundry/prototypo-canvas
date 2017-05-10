@@ -274,7 +274,7 @@ export default class PrototypoCanvasContainer extends Component {
 		const overlay = (!this.state.instance || this.state.instance === '') || true ? <div className="prototypo-canvas-overlay"></div> : false;
 
 		return (
-			<div className="prototypo-canvas-container" ref="container" onDoubleClick={this.reset}>
+			<div className={`prototypo-canvas-container ${this.props.canvasMode === 'shadow' ? 'nointeraction' : ''}`} ref="container" onDoubleClick={this.reset}>
 				<canvas ref="canvas"></canvas>
 				{overlay}
 			</div>
