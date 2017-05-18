@@ -219,6 +219,7 @@ export default class PrototypoCanvasContainer extends Component {
 				}
 				this.alreadyRafed = undefined;
 			});
+			this.props.getGlyphViewMatrix(this.state.instance.view.matrix);
 		}
 		if (this.props.uiMode !== prevProps.uiMode && this.props.uiMode.indexOf('glyph') !== -1) {
 			setTimeout(() => {
