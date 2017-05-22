@@ -406,6 +406,7 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 		}
 
 		if (pCanvasInstance.allowMove) {
+			pCanvasInstance.delta = new paper.Point(0,0);
 			pCanvasInstance.prevPos = new paper.Point(event.event.clientX, event.event.clientY);
 		}
 	};
@@ -473,7 +474,8 @@ PrototypoCanvas.prototype.setupEvents = function( pCanvasInstance ) {
 				delta = currPos.subtract(pCanvasInstance.prevPos);
 
 			pCanvasInstance.prevPos = currPos;
-
+			pCanvasInstance.delta.x += delta.x;
+			pCanvasInstance.delta.y += delta.y;
 			this.center = this.center.subtract(delta.divide(this.zoom * window.devicePixelRatio));
 			return;
 		}
@@ -766,7 +768,6 @@ PrototypoCanvas.prototype.update = function( values ) {
 	// latestRafValues is used and disposed by the raf loop
 	// so we need all three!
 	this.latestValues = this.latestRafValues = values;
-
 	this.enqueue({
 		type: 'update',
 		data: values
