@@ -828,6 +828,18 @@ PrototypoCanvas.prototype.download =
 		}.bind(this), name, false, values);
 	};
 
+PrototypoCanvas.prototype.getArrayBuffer =
+	function(name, merged, values, user ) {
+		return new Promise((resolve, reject) => {
+			try {
+				this.generateOtf(resolve, name, false, values);
+			}
+			catch (err) {
+				reject(err);
+			}
+		});
+	};
+
 PrototypoCanvas.prototype.getBlob = function( cb, name, merged, values ) {
 	return new Promise(function( resolve, reject ) {
 		try {
