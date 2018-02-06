@@ -39,6 +39,18 @@ export default class PrototypoCanvasContainer extends Component {
 						nextProps.exportEmail
 					)
 				}
+				else if (nextProps.hostTag) {
+					this.props.preExport();
+					this.state.instance.getArrayBuffer(
+						nextProps.exportName,
+						true,
+						nextProps.exportValues,
+						nextProps.exportEmail
+					).then(data => {
+						nextProps.hostTagResolver(data);
+						nextProps.afterExport();
+					});
+				}
 
 				if (nextProps.exportGlyphrTag) {
 					this.props.preExportGlyphr();
